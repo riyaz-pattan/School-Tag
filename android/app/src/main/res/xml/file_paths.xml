@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Internal app files (getFilesDir()) -->
+    <files-path name="files" path="." />
+
+    <!-- Internal cache (getCacheDir()) -->
+    <cache-path name="cache" path="." />
+
+    <!-- External private files (getExternalFilesDir()) - e.g., Android/data/com.example.student_app/files/ -->
+    <external-files-path name="external_files" path="." />
+
+    <!-- External cache (getExternalCacheDir()) -->
+    <external-cache-path name="external_cache" path="." />
+
+    <!-- Public external storage root (e.g., /storage/emulated/0/) - for Downloads, DCIM, etc. -->
+    <external-path name="external" path="." />
+
+    <!-- Optional: Specific folders like Downloads, Pictures -->
+    <external-path name="downloads" path="Download/" />
+    <external-path name="pictures" path="Pictures/" />
+    <external-path name="dcim" path="DCIM/" />
+</paths>

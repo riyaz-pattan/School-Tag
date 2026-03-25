@@ -1,0 +1,91 @@
+name: student_app
+description: "A new Flutter project."
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  animated_text_kit: ^4.3.0
+  cloud_firestore: ^6.0.2
+  cloud_functions: ^6.0.3
+  collection: ^1.19.1
+  connectivity_plus: ^7.0.0
+  csv: ^6.0.0
+  cupertino_icons: ^1.0.8
+  file_picker: ^10.3.3
+  firebase_auth: ^6.1.0
+  firebase_core: ^4.1.1
+  firebase_messaging: ^16.0.3
+  firebase_storage: ^13.0.2
+  fl_chart: ^1.1.1
+  flutter:
+    sdk: flutter
+  flutter_local_notifications: ^19.5.0
+  flutter_markdown: ^0.7.7+1
+  flutter_rating_bar: ^4.0.1
+  flutter_vector_icons: ^2.0.0
+  foundation: ^0.0.5
+  google_generative_ai: ^0.4.7
+  http: ^1.5.0
+  image_picker: ^1.2.0
+  intl: ^0.20.2
+  lottie: ^3.1.2
+  open_file: ^3.5.10
+  path_provider: ^2.1.5
+  pdf: ^3.11.3
+  pdfx: ^2.9.2
+  permission_handler: ^12.0.1
+  printing: ^5.14.2
+  provider: ^6.1.5+1
+  shared_preferences: ^2.5.3
+  syncfusion_flutter_xlsio: ^31.2.5
+  universal_html: ^2.2.4
+  universal_io: ^2.2.2
+  url_launcher: ^6.3.2
+  webview_flutter: ^4.13.0
+
+dev_dependencies:
+  flutter_launcher_icons: ^0.14.4
+  flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.7
+  flutter_test:
+    sdk: flutter
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/icon/logo_foreground.png"
+  web:
+    generate: true
+    image_path: "assets/icon/app_icon.png"
+
+flutter_native_splash:
+  android: true
+  ios: true
+  web: true
+
+  color: "#ffffff"
+  color_dark: "#ffffff"
+  image: assets/splash/splash.png
+  branding: assets/splash/brandimage.png
+
+  android_12:
+    image: assets/splash/android12splash.png
+    icon_background_color: "#ffffff"
+    color_dark: "#ffffff"
+    branding: assets/splash/brandimage.png
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icon/
+    - assets/fonts/
+    - assets/splash/

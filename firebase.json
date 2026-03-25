@@ -1,0 +1,43 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ],
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "student-app-c362d",
+          "configurations": {
+            "web": "1:807443287145:web:00e1545145fecefeb766f8",
+            "android": "1:807443287145:android:e9cbb972ed03f323b766f8",
+            "ios": "YOUR_IOS_APP_ID"
+          }
+        }
+      }
+    }
+  }
+}
