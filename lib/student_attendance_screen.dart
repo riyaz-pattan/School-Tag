@@ -33,6 +33,7 @@ class StudentAttendanceScreen extends StatefulWidget {
 
 class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
   DateTime _selectedDate = DateTime.now();
+  DateTime _currentMonthView = DateTime(DateTime.now().year, DateTime.now().month);
   List<Map<String, dynamic>> _dailyAttendance = [];
   Map<String, dynamic> _attendanceSummary = {};
   bool _isLoading = true;
@@ -629,30 +630,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
     });
   }
 
-  Future<void> _selectDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-    );
 
-    if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-        _isLoading = true;
-      });
-      _loadAttendanceData();
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    return status == 'present' ? Colors.green : Colors.red;
-  }
-
-  IconData _getStatusIcon(String status) {
-    return status == 'present' ? Icons.check_circle : Icons.cancel;
-  }
 
   void _retryLoading() {
     setState(() {
@@ -693,11 +671,247 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
     await _loadAttendanceData();
   }
 
-  // Desktop Layout
+  // ===== Calendar Helper Methods =====
+
+  Map<int, String> _getDailyStatusForMonth(DateTime month) {
+    final Map<int, String> dailyStatus = {};
+    final yearMonth =
+        '${month.year}-${month.month.toString().padLeft(2, '0')}';
+
+    final Map<String, List<Map<String, dynamic>>> recordsByDate = {};
+    for (var record in _cachedAttendanceRecords) {
+      final date = record['date'] as String?;
+      if (date != null && date.startsWith(yearMonth)) {
+        recordsByDate.putIfAbsent(date, () => []).add(record);
+      }
+    }
+
+    for (var entry in recordsByDate.entries) {
+      final dateParts = entry.key.split('-');
+      if (dateParts.length >= 3) {
+        final day = int.tryParse(dateParts[2]) ?? 0;
+        final records = entry.value;
+
+        if (_isPerDayOnce) {
+          var firstPeriod = records.first;
+          for (var r in records) {
+            final curr =
+                int.tryParse(r['period_number']?.toString() ?? '999') ?? 999;
+            final best =
+                int.tryParse(
+                    firstPeriod['period_number']?.toString() ?? '999') ??
+                999;
+            if (curr < best) firstPeriod = r;
+          }
+          dailyStatus[day] =
+              firstPeriod['status'] == 'present' ? 'present' : 'absent';
+        } else {
+          final allPresent =
+              records.every((r) => r['status'] == 'present');
+          dailyStatus[day] = allPresent ? 'present' : 'absent';
+        }
+      }
+    }
+
+    return dailyStatus;
+  }
+
+  void _navigateMonth(int direction) {
+    setState(() {
+      _currentMonthView = DateTime(
+          _currentMonthView.year, _currentMonthView.month + direction);
+    });
+  }
+
+  void _showDayDetailsSheet(DateTime date) async {
+    setState(() {
+      _selectedDate = date;
+    });
+    await _loadAttendanceData();
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _buildDayDetailsSheet(date),
+    );
+  }
+
+  Widget _buildDayDetailsSheet(DateTime date) {
+    final dateStr = DateFormat('EEEE, MMMM d, yyyy').format(date);
+    return Container(
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1565C0).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.calendar_today,
+                      color: Color(0xFF1565C0), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Day Details',
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1A1A2E))),
+                      Text(dateStr,
+                          style: TextStyle(
+                              fontSize: 13, color: Colors.grey[600])),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.all(40),
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Color(0xFF1565C0)),
+            )
+          else if (_dailyAttendance.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(40),
+              child: Column(
+                children: [
+                  Icon(Icons.event_busy, size: 48, color: Colors.grey[300]),
+                  const SizedBox(height: 12),
+                  Text('No attendance records for this day',
+                      style:
+                          TextStyle(fontSize: 15, color: Colors.grey[500])),
+                ],
+              ),
+            )
+          else
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                itemCount: _dailyAttendance.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final att = _dailyAttendance[index];
+                  final isPresent = att['status'] == 'present';
+                  return Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isPresent
+                          ? const Color(0xFFE8F5E9)
+                          : const Color(0xFFFFEBEE),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isPresent
+                            ? const Color(0xFF66BB6A)
+                            : const Color(0xFFEF5350),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: isPresent
+                                ? const Color(0xFF43A047)
+                                : const Color(0xFFE53935),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            isPresent
+                                ? Icons.check_rounded
+                                : Icons.close_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Period ${att['period_number']} — ${att['subject']}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                    color: Color(0xFF1A1A2E)),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'By ${att['marked_by']}${att['time'] != 'N/A' ? ' • ${att['time']}' : ''}',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.grey[600]),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isPresent
+                                ? const Color(0xFF43A047)
+                                : const Color(0xFFE53935),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            isPresent ? 'PRESENT' : 'ABSENT',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ===== Layout Builders =====
+
   Widget _buildDesktopLayout() {
     return Row(
       children: [
-        // Sidebar with auto-slide
         _AttendanceInfoSidebar(
           schoolName: widget.schoolName,
           studentName: widget.studentName,
@@ -706,12 +920,16 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
           academicYear: _getAcademicYearText(),
           attendanceType: _getAttendanceTypeDescription(),
         ),
-        // Main Content
         Expanded(
           child: Column(
             children: [
               _buildDesktopTopBar(),
-              Expanded(child: _buildMainContent()),
+              Expanded(
+                child: Container(
+                  color: const Color(0xFFF5F7FA),
+                  child: SingleChildScrollView(child: _buildMainContent()),
+                ),
+              ),
             ],
           ),
         ),
@@ -723,53 +941,53 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
     return Container(
       height: 70,
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      color: Colors.white,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Row(
         children: [
-          // Back button
           IconButton(
-            icon: const Icon(
-              Icons.arrow_back,
-              color: Color.fromARGB(255, 33, 150, 243),
-            ),
-            onPressed: () {
-              Navigator.of(
-                context,
-              ).pop(); // Changed from pushAndRemoveUntil to simple pop
-            },
+            icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1565C0)),
+            onPressed: () => Navigator.of(context).pop(),
             tooltip: 'Back to Dashboard',
           ),
+          const SizedBox(width: 8),
           const Text(
             'My Attendance',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color.fromARGB(255, 33, 150, 243),
+              color: Color(0xFF1A1A2E),
             ),
           ),
           const Spacer(),
-          // Academic Year Info
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue[100]!),
+              color: const Color(0xFF1565C0).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               _getAcademicYearText(),
               style: const TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Color.fromARGB(255, 33, 150, 243),
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1565C0),
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.blue),
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF1565C0)),
             onPressed: _refreshData,
-            tooltip: 'Refresh Attendance',
+            tooltip: 'Refresh',
           ),
         ],
       ),
@@ -779,269 +997,320 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
   // Mobile/Tablet Layout
   Widget _buildMobileTabletLayout() {
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            const Icon(Icons.calendar_today, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                '${widget.schoolName} - Attendance',
-                style: TextStyle(fontSize: _isDesktop ? 20 : 18),
-                overflow: TextOverflow.ellipsis,
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 140,
+            floating: false,
+            pinned: true,
+            backgroundColor: const Color(0xFF1565C0),
+            foregroundColor: Colors.white,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded),
+                onPressed: _refreshData,
+                tooltip: 'Refresh',
+              ),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.only(left: 56, bottom: 16, right: 16),
+              title: Text(
+                'My Attendance',
+                style: TextStyle(
+                  fontSize: _isMobile ? 18 : 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF1A237E), Color(0xFF1565C0), Color(0xFF42A5F5)],
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: -30,
+                      top: -30,
+                      child: Container(
+                        width: 160,
+                        height: 160,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.08),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: -20,
+                      bottom: -40,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.05),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ],
-        ),
-        backgroundColor: Color.fromARGB(255, 33, 150, 243),
-        foregroundColor: Colors.white,
-        elevation: 2,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: _refreshData,
-            tooltip: 'Refresh Attendance',
+          ),
+          SliverToBoxAdapter(
+            child: _isLoading && _isInitialLoad
+                ? SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.6,
+                    child: _buildLoadingState(),
+                  )
+                : _buildMainContent(),
           ),
         ],
       ),
-      body: _buildMainContent(),
     );
   }
 
   Widget _buildMainContent() {
-    if (_isLoading && _isInitialLoad) {
-      return _buildLoadingState();
+    if (_isLoading && _isInitialLoad && _isDesktop) {
+      return SizedBox(
+        height: MediaQuery.of(context).size.height * 0.6,
+        child: _buildLoadingState(),
+      );
     }
 
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          // Messages
-          if (_errorMessage != null) _buildMessage(_errorMessage!, true),
-          const SizedBox(height: 16),
+    final padding = _isDesktop
+        ? const EdgeInsets.fromLTRB(24, 16, 24, 24)
+        : const EdgeInsets.fromLTRB(16, 16, 16, 24);
 
-          // Student Info Card for mobile/tablet
-          if (!_isDesktop) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: Colors.blue[100],
-                        child: Text(
-                          widget.studentName[0].toUpperCase(),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.studentName,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              'Class: ${_className ?? 'Unknown'}${widget.section != null ? ' - ${widget.section}' : ''}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            Text(
-                              _getAcademicYearText(),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.blue[700],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+    return Padding(
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_errorMessage != null) ...[
+            _buildMessage(_errorMessage!, true),
             const SizedBox(height: 16),
           ],
+          // Student Info (mobile/tablet only)
+          if (!_isDesktop) ...[
+            _buildStudentInfoCard(),
+            const SizedBox(height: 16),
+          ],
+          // Summary Stats
+          _buildSummarySection(),
+          const SizedBox(height: 20),
+          // Calendar
+          _buildCalendarCard(),
+          const SizedBox(height: 20),
+          // Subject-wise Attendance
+          if (_isPerPeriod && _subjectWiseAttendance.isNotEmpty) ...[
+            _buildSubjectWiseAttendanceCard(),
+            const SizedBox(height: 20),
+          ],
+          // Legend
+          _buildLegend(),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
 
-          // Attendance Summary Card
-          Padding(
-            padding: _isDesktop
-                ? const EdgeInsets.fromLTRB(24, 16, 24, 16)
-                : const EdgeInsets.symmetric(horizontal: 16),
-            child: _buildAttendanceSummaryCard(),
+  Widget _buildStudentInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
-
-          const SizedBox(height: 16),
-
-          // Subject-wise Attendance (for per_period only)
-          if (_isPerPeriod && _subjectWiseAttendance.isNotEmpty)
-            Padding(
-              padding: _isDesktop
-                  ? const EdgeInsets.fromLTRB(24, 0, 24, 16)
-                  : const EdgeInsets.symmetric(horizontal: 16),
-              child: _buildSubjectWiseAttendanceCard(),
-            ),
-
-          const SizedBox(height: 16),
-
-          // Date Selection Card
-          Padding(
-            padding: _isDesktop
-                ? const EdgeInsets.fromLTRB(24, 0, 24, 16)
-                : const EdgeInsets.symmetric(horizontal: 16),
-            child: Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1A237E), Color(0xFF1565C0)],
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Center(
+              child: Text(
+                widget.studentName[0].toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.studentName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A1A2E),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Class: ${_className ?? 'Unknown'}${widget.section != null ? ' • ${widget.section}' : ''}',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1565C0).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              _getAcademicYearText().replaceAll('Academic Year: ', ''),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1565C0),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummarySection() {
+    final percentage = (_attendanceSummary['percentage'] ?? 0.0).toDouble();
+    final total = _attendanceSummary['total'] ?? 0;
+    final present = _attendanceSummary['present'] ?? 0;
+    final absent = _attendanceSummary['absent'] ?? 0;
+
+    Color percentColor;
+    if (percentage >= 75) {
+      percentColor = const Color(0xFF43A047);
+    } else if (percentage >= 50) {
+      percentColor = const Color(0xFFFF8F00);
+    } else {
+      percentColor = const Color(0xFFE53935);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              // Percentage Ring
+              SizedBox(
+                width: 80,
+                height: 80,
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    const Text(
-                      'Select Date',
+                    SizedBox(
+                      width: 80,
+                      height: 80,
+                      child: CircularProgressIndicator(
+                        value: percentage / 100,
+                        strokeWidth: 8,
+                        backgroundColor: Colors.grey[200],
+                        valueColor: AlwaysStoppedAnimation<Color>(percentColor),
+                        strokeCap: StrokeCap.round,
+                      ),
+                    ),
+                    Text(
+                      '${percentage.toStringAsFixed(0)}%',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        color: percentColor,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.calendar_today,
-                          color: Colors.blue[700],
-                        ),
-                      ),
-                      title: const Text(
-                        'View Attendance For',
-                        style: TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      subtitle: Text(
-                        DateFormat('MMMM d, yyyy').format(_selectedDate),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(
-                          Icons.edit_calendar,
-                          color: Colors.blue,
-                        ),
-                        onPressed: _selectDate,
-                      ),
-                      onTap: _selectDate,
                     ),
                   ],
                 ),
               ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Daily Attendance List
-          Padding(
-            padding: _isDesktop
-                ? const EdgeInsets.fromLTRB(24, 0, 24, 24)
-                : const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Daily Attendance',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildMiniStat('Total', total.toString(),
+                          Icons.calendar_month_rounded, const Color(0xFF1565C0)),
+                    ),
+                    Expanded(
+                      child: _buildMiniStat('Present', present.toString(),
+                          Icons.check_circle_rounded, const Color(0xFF43A047)),
+                    ),
+                    Expanded(
+                      child: _buildMiniStat('Absent', absent.toString(),
+                          Icons.cancel_rounded, const Color(0xFFE53935)),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-
-                if (_errorMessage != null)
-                  _buildMessage(_errorMessage!, true)
-                else if (_dailyAttendance.isEmpty)
-                  Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1565C0).withOpacity(0.06),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline_rounded,
+                    color: Color(0xFF1565C0), size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _getAttendanceTypeDescription(),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF1565C0),
                     ),
-                    child: const Padding(
-                      padding: EdgeInsets.all(20.0),
-                      child: Center(
-                        child: Text(
-                          'No attendance records found for selected date',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  ..._dailyAttendance.map(
-                    (attendance) => Card(
-                      elevation: 2,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: ListTile(
-                        leading: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: _getStatusColor(
-                              attendance['status'],
-                            ).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: _getStatusColor(attendance['status']),
-                            ),
-                          ),
-                          child: Icon(
-                            _getStatusIcon(attendance['status']),
-                            color: _getStatusColor(attendance['status']),
-                          ),
-                        ),
-                        title: Text(
-                          'Period ${attendance['period_number']} - ${attendance['subject']}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Status: ${attendance['status'].toString().toUpperCase()}',
-                              style: TextStyle(
-                                color: _getStatusColor(attendance['status']),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text('Marked by: ${attendance['marked_by']}'),
-                            if (attendance['time'] != 'N/A')
-                              Text('Time: ${attendance['time']}'),
-                          ],
-                        ),
-                      ),
-                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                ),
               ],
             ),
           ),
@@ -1050,257 +1319,419 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
     );
   }
 
-  Widget _buildAttendanceSummaryCard() {
-    final percentage = (_attendanceSummary['percentage'] ?? 0.0).toDouble();
-    final type = _attendanceSummary['type'] ?? 'periods';
-    final total = _attendanceSummary['total'] ?? 0;
-    final present = _attendanceSummary['present'] ?? 0;
-    final absent = _attendanceSummary['absent'] ?? 0;
+  Widget _buildMiniStat(String label, String value, IconData icon, Color color) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
+        ),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
 
-    Color getPercentageColor(double percentage) {
-      if (percentage >= 75) return Colors.green;
-      if (percentage >= 50) return Colors.orange;
-      return Colors.red;
-    }
+  Widget _buildCalendarCard() {
+    final dailyStatus = _getDailyStatusForMonth(_currentMonthView);
+    final firstDay =
+        DateTime(_currentMonthView.year, _currentMonthView.month, 1);
+    final daysInMonth =
+        DateTime(_currentMonthView.year, _currentMonthView.month + 1, 0).day;
+    final startWeekday = firstDay.weekday; // 1=Monday, 7=Sunday
+    final offset = startWeekday - 1;
+    final totalCells = offset + daysInMonth;
+    final rows = (totalCells / 7).ceil();
+    final gridItemCount = rows * 7;
 
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            // Percentage Circle
-            Stack(
-              alignment: Alignment.center,
+    final today = DateTime.now();
+    final isCurrentMonth = _currentMonthView.year == today.year &&
+        _currentMonthView.month == today.month;
+    final dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Month Navigation Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF1A237E), Color(0xFF1565C0)],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                SizedBox(
-                  width: 120,
-                  height: 120,
-                  child: CircularProgressIndicator(
-                    value: percentage / 100,
-                    strokeWidth: 12,
-                    backgroundColor: Colors.grey[300],
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      getPercentageColor(percentage),
+                IconButton(
+                  icon: const Icon(Icons.chevron_left_rounded,
+                      color: Colors.white, size: 28),
+                  onPressed: () => _navigateMonth(-1),
+                ),
+                Flexible(
+                  child: Text(
+                    DateFormat('MMMM yyyy').format(_currentMonthView),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Column(
-                  children: [
-                    Text(
-                      '${percentage.toStringAsFixed(1)}%',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      'Attendance',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    ),
-                  ],
+                IconButton(
+                  icon: const Icon(Icons.chevron_right_rounded,
+                      color: Colors.white, size: 28),
+                  onPressed: () => _navigateMonth(1),
                 ),
               ],
             ),
-
-            const SizedBox(height: 20),
-
-            // Stats Grid
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 3,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              childAspectRatio: _isMobile ? 0.9 : 1.2,
-              children: [
-                _buildStatItem(
-                  type == 'days' ? 'Total Days' : 'Total Periods',
-                  total.toString(),
-                  type == 'days' ? Icons.calendar_today : Icons.schedule,
-                  Colors.blue,
-                ),
-                _buildStatItem(
-                  type == 'days' ? 'Present Days' : 'Present Periods',
-                  present.toString(),
-                  Icons.check_circle,
-                  Colors.green,
-                ),
-                _buildStatItem(
-                  type == 'days' ? 'Absent Days' : 'Absent Periods',
-                  absent.toString(),
-                  Icons.cancel,
-                  Colors.red,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            // Additional Info
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info, color: Colors.blue[700], size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
+          ),
+          // Day of Week Headers
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            child: Row(
+              children: dayLabels.map((day) {
+                final isWeekend = day == 'Sat' || day == 'Sun';
+                return Expanded(
+                  child: Center(
                     child: Text(
-                      _getAttendanceTypeDescription(),
+                      day,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.blue[700],
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w700,
+                        color: isWeekend
+                            ? Colors.grey[400]
+                            : const Color(0xFF1A1A2E),
+                        letterSpacing: 0.3,
                       ),
                     ),
                   ),
-                ],
-              ),
+                );
+              }).toList(),
             ),
-          ],
+          ),
+          Divider(height: 1, indent: 12, endIndent: 12, color: Colors.grey[200]),
+          // Calendar Grid
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 7,
+                childAspectRatio: 1.0,
+                mainAxisSpacing: 4,
+                crossAxisSpacing: 4,
+              ),
+              itemCount: gridItemCount,
+              itemBuilder: (context, index) {
+                if (index < offset || index >= offset + daysInMonth) {
+                  return const SizedBox();
+                }
+                final day = index - offset + 1;
+                final date = DateTime(
+                    _currentMonthView.year, _currentMonthView.month, day);
+                final isToday = isCurrentMonth && day == today.day;
+                final isFuture = date.isAfter(today);
+                final status = dailyStatus[day];
+                return _buildDayCell(day, status, isToday, isFuture, date);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayCell(
+      int day, String? status, bool isToday, bool isFuture, DateTime date) {
+    Color bgColor;
+    Color textColor;
+    BoxBorder? border;
+
+    if (isFuture) {
+      bgColor = Colors.grey[50]!;
+      textColor = Colors.grey[350]!;
+    } else if (status == 'present') {
+      bgColor = const Color(0xFF43A047);
+      textColor = Colors.white;
+    } else if (status == 'absent') {
+      bgColor = const Color(0xFFE53935);
+      textColor = Colors.white;
+    } else {
+      bgColor = Colors.grey[100]!;
+      textColor = const Color(0xFF1A1A2E);
+    }
+
+    if (isToday) {
+      border = Border.all(color: const Color(0xFF1565C0), width: 2.5);
+    }
+
+    return GestureDetector(
+      onTap: isFuture ? null : () => _showDayDetailsSheet(date),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(10),
+          border: border,
+          boxShadow: status != null && !isFuture
+              ? [
+                  BoxShadow(
+                    color: bgColor.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : null,
+        ),
+        child: Center(
+          child: Text(
+            '$day',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight:
+                  isToday || status != null ? FontWeight.bold : FontWeight.w500,
+              color: textColor,
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLegend() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 16,
+        runSpacing: 8,
+        children: [
+          _buildLegendItem(const Color(0xFF43A047), 'Present'),
+          _buildLegendItem(const Color(0xFFE53935), 'Absent'),
+          _buildLegendItem(Colors.grey[200]!, 'No Record'),
+          _buildLegendDot(const Color(0xFF1565C0), 'Today'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(label,
+            style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[700],
+                fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+
+  Widget _buildLegendDot(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: color, width: 2.5),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(label,
+            style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[700],
+                fontWeight: FontWeight.w500)),
+      ],
     );
   }
 
   Widget _buildSubjectWiseAttendanceCard() {
-    // Sort subjects by percentage (highest first)
     final sortedSubjects = _subjectWiseAttendance.entries.toList()
       ..sort((a, b) => b.value['percentage'].compareTo(a.value['percentage']));
 
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Subject-wise Attendance',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            ...sortedSubjects.map((entry) {
-              final subject = entry.key;
-              final stats = entry.value;
-              final percentage = (stats['percentage'] as double).toDouble();
-              final present = stats['present'] as int;
-              final total = stats['total'] as int;
-
-              Color getPercentageColor(double percentage) {
-                if (percentage >= 75) return Colors.green;
-                if (percentage >= 50) return Colors.orange;
-                return Colors.red;
-              }
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            subject,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          Text(
-                            'Present: $present/$total periods',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: getPercentageColor(percentage).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: getPercentageColor(percentage),
-                        ),
-                      ),
-                      child: Text(
-                        '${percentage.toStringAsFixed(1)}%',
-                        style: TextStyle(
-                          color: getPercentageColor(percentage),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatItem(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 4),
-          Flexible(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: color,
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1565C0).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.menu_book_rounded,
+                    color: Color(0xFF1565C0), size: 20),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Subject-wise Attendance',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A1A2E),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 2),
-          Flexible(
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 10, color: Colors.grey),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
+          const SizedBox(height: 16),
+          ...sortedSubjects.map((entry) {
+            final subject = entry.key;
+            final stats = entry.value;
+            final percentage = (stats['percentage'] as double).toDouble();
+            final present = stats['present'] as int;
+            final total = stats['total'] as int;
+
+            Color barColor;
+            if (percentage >= 75) {
+              barColor = const Color(0xFF43A047);
+            } else if (percentage >= 50) {
+              barColor = const Color(0xFFFF8F00);
+            } else {
+              barColor = const Color(0xFFE53935);
+            }
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          subject,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: Color(0xFF1A1A2E),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: barColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: barColor),
+                        ),
+                        child: Text(
+                          '${percentage.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            color: barColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: percentage / 100,
+                            minHeight: 6,
+                            backgroundColor: Colors.grey[200],
+                            valueColor: AlwaysStoppedAnimation<Color>(barColor),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '$present/$total',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
         ],
       ),
     );
@@ -1311,9 +1742,9 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(
+          const CircularProgressIndicator(
             strokeWidth: 3,
-            color: Color.fromARGB(255, 33, 150, 243),
+            color: Color(0xFF1565C0),
           ),
           const SizedBox(height: 16),
           Text(
@@ -1328,35 +1759,36 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
   Widget _buildMessage(String message, bool isError) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isError ? Colors.red[50] : Colors.green[50],
+        color: isError ? const Color(0xFFFFEBEE) : const Color(0xFFE8F5E9),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isError ? Colors.red[200]! : Colors.green[200]!,
+          color: isError ? const Color(0xFFEF5350) : const Color(0xFF66BB6A),
+          width: 0.5,
         ),
       ),
       child: Row(
         children: [
           Icon(
-            isError ? Icons.error_outline : Icons.check_circle_outline,
-            color: isError ? Colors.red[700] : Colors.green[700],
+            isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
+            color: isError ? const Color(0xFFE53935) : const Color(0xFF43A047),
+            size: 20,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
               style: TextStyle(
-                color: isError ? Colors.red[700] : Colors.green[700],
+                color: isError ? const Color(0xFFE53935) : const Color(0xFF43A047),
                 fontWeight: FontWeight.w500,
+                fontSize: 13,
               ),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            onPressed: () => setState(() {
-              _errorMessage = null;
-            }),
+          GestureDetector(
+            onTap: () => setState(() => _errorMessage = null),
+            child: Icon(Icons.close_rounded, size: 18, color: Colors.grey[500]),
           ),
         ],
       ),
@@ -1366,12 +1798,16 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isDesktop) {
-      return Scaffold(body: _buildDesktopLayout());
+      return Scaffold(
+        backgroundColor: const Color(0xFFF5F7FA),
+        body: _buildDesktopLayout(),
+      );
     } else {
       return _buildMobileTabletLayout();
     }
   }
 }
+
 
 // Separate StatefulWidget for sidebar to isolate its state
 class _AttendanceInfoSidebar extends StatefulWidget {

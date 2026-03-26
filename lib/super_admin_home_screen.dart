@@ -10,6 +10,7 @@ import 'school_code_screen.dart';
 import 'user_management_screen.dart';
 import 'add_users_screen.dart';
 import 'users_count_screen.dart'; // NEW IMPORT
+import 'demo_bookings_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
@@ -208,6 +209,16 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
       context,
       MaterialPageRoute(
         builder: (context) => UsersCountScreen(userId: widget.userId),
+      ),
+    );
+  }
+
+  // Navigate to Demo Bookings Screen
+  void _navigateToDemoBookings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DemoBookingsScreen(userId: widget.userId),
       ),
     );
   }
@@ -682,6 +693,14 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
             onTap: _navigateToUsersCount,
           ),
           ListTile(
+            leading: const Icon(
+              Icons.event_available,
+              color: Colors.deepOrange,
+            ),
+            title: const Text('Demo Bookings'),
+            onTap: _navigateToDemoBookings,
+          ),
+          ListTile(
             leading: const Icon(Icons.lock, color: Colors.grey),
             title: const Text('Change Password'),
             onTap: _showChangePasswordDialog,
@@ -788,6 +807,11 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                     Icons.analytics,
                     'Users Count',
                     _navigateToUsersCount,
+                  ),
+                  _buildSidebarActionItem(
+                    Icons.event_available,
+                    'Demo Bookings',
+                    _navigateToDemoBookings,
                   ),
                   _buildSidebarActionItem(
                     Icons.lock,
@@ -1134,7 +1158,12 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, MaterialColor color) {
+  Widget _buildStatCard(
+    String title,
+    String value,
+    IconData icon,
+    MaterialColor color,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1220,7 +1249,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
             builder: (context, constraints) {
               int crossAxisCount = _isMobile ? 3 : 6;
               if (constraints.maxWidth < 340) {
-                 crossAxisCount = 3; 
+                crossAxisCount = 3;
               }
               return GridView.count(
                 shrinkWrap: true,
@@ -1260,9 +1289,15 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                     Colors.green,
                     _navigateToUserManagement,
                   ),
+                  _buildFlatAppIcon(
+                    'Demo Bookings',
+                    Icons.event_available,
+                    Colors.deepOrange,
+                    _navigateToDemoBookings,
+                  ),
                 ],
               );
-            }
+            },
           ),
         ),
       ],
@@ -1292,13 +1327,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                 color: colorSwatch[50] ?? primaryColor.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(22),
               ),
-              child: Center(
-                child: Icon(
-                  icon, 
-                  color: primaryColor, 
-                  size: 30,
-                ),
-              ),
+              child: Center(child: Icon(icon, color: primaryColor, size: 30)),
             ),
             const SizedBox(height: 12),
             Text(
@@ -1371,11 +1400,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
-                          Icons.update,
-                          size: 14,
-                          color: Colors.white,
-                        ),
+                        const Icon(Icons.update, size: 14, color: Colors.white),
                         const SizedBox(width: 4),
                         Text(
                           'Last updated: ${_formatDateTime(_lastDataFetchTime!)}',
@@ -1424,7 +1449,11 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                 CircleAvatar(
                   radius: 26,
                   backgroundColor: Colors.indigo[50],
-                  child: Icon(Icons.shield, size: 28, color: Colors.indigo[700]),
+                  child: Icon(
+                    Icons.shield,
+                    size: 28,
+                    color: Colors.indigo[700],
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -1456,7 +1485,13 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                 children: [
                   SizedBox(
                     width: 130,
-                    child: Text('Role:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                    child: Text(
+                      'Role:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
+                    ),
                   ),
                   Text('Super Administrator', style: TextStyle(fontSize: 16)),
                 ],
@@ -1465,7 +1500,10 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
             if (_lastDataFetchTime != null) ...[
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.orange.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(12),
