@@ -1957,3 +1957,663 @@ exports.sendMessageNotification = functions.firestore
     
     return Promise.all(notifications);
   });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RAZORPAY FEE PAYMENT FUNCTIONS (Multi-Tenant)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Each school stores its own Razorpay credentials in Firestore:
+//   schools/{schoolCode}/settings/payment_config  → { razorpayKeyId, isPaymentEnabled }
+//   schools/{schoolCode}/settings/payment_secrets  → { razorpayKeySecret, webhookSecret }
+//
+// The admin configures these via the Admin Payment Settings screen.
+// Cloud Functions fetch them dynamically per-school.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
+
+/**
+ * Fetches Razorpay credentials for a specific school from Firestore
+ * and returns an initialized Razorpay instance + secrets.
+ */
+async function getRazorpayForSchool(schoolCode) {
+  const configDoc = await db.collection('schools').doc(schoolCode)
+    .collection('settings').doc('payment_config').get();
+  const secretsDoc = await db.collection('schools').doc(schoolCode)
+    .collection('settings').doc('payment_secrets').get();
+
+  if (!configDoc.exists || !secretsDoc.exists) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'Payment gateway is not configured for this school. Please ask the admin to set up Razorpay credentials.'
+    );
+  }
+
+  const config = configDoc.data();
+  const secrets = secretsDoc.data();
+
+  if (!config.isPaymentEnabled) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'Fee payments are currently disabled for this school.'
+    );
+  }
+
+  if (!config.razorpayKeyId || !secrets.razorpayKeySecret) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'Razorpay API keys are not configured for this school.'
+    );
+  }
+
+  const razorpayInstance = new Razorpay({
+    key_id: config.razorpayKeyId,
+    key_secret: secrets.razorpayKeySecret,
+  });
+
+  return {
+    razorpay: razorpayInstance,
+    keyId: config.razorpayKeyId,
+    keySecret: secrets.razorpayKeySecret,
+    webhookSecret: secrets.webhookSecret || '',
+  };
+}
+
+// ─── 1. Create Razorpay Order ──────────────────────────────────────────────
+// Called by the Flutter app when a student taps "Pay Now"
+exports.createRazorpayOrder = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { schoolCode, dueId, studentId } = data;
+
+  if (!schoolCode || !dueId || !studentId) {
+    throw new functions.https.HttpsError('invalid-argument', 'schoolCode, dueId, and studentId are required');
+  }
+
+  // Verify caller is the student themselves
+  if (context.auth.uid !== studentId) {
+    throw new functions.https.HttpsError('permission-denied', 'You can only pay your own fees');
+  }
+
+  try {
+    // Fetch the student due
+    const dueRef = db.collection('schools').doc(schoolCode).collection('student_dues').doc(dueId);
+    const dueDoc = await dueRef.get();
+
+    if (!dueDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Fee due not found');
+    }
+
+    const dueData = dueDoc.data();
+
+    // Verify the due belongs to this student
+    if (dueData.studentId !== studentId) {
+      throw new functions.https.HttpsError('permission-denied', 'This fee does not belong to you');
+    }
+
+    // Verify the due is payable
+    if (dueData.status !== 'pending' && dueData.status !== 'overdue') {
+      throw new functions.https.HttpsError('failed-precondition', `Cannot pay a fee with status: ${dueData.status}`);
+    }
+
+    // Fetch school-specific Razorpay credentials
+    const { razorpay, keyId } = await getRazorpayForSchool(schoolCode);
+    const amountInPaise = Math.round(dueData.amount * 100); // Razorpay uses paise
+
+    const order = await razorpay.orders.create({
+      amount: amountInPaise,
+      currency: 'INR',
+      receipt: `due_${dueId}`,
+      notes: {
+        schoolCode: schoolCode,
+        dueId: dueId,
+        studentId: studentId,
+        installmentLabel: dueData.installmentLabel || '',
+      },
+    });
+
+    console.log(`Razorpay order created: ${order.id} for due: ${dueId}, amount: ${amountInPaise} paise`);
+
+    // Update the due with the order ID
+    await dueRef.update({
+      razorpayOrderId: order.id,
+    });
+
+    // Create a transaction record
+    await db.collection('schools').doc(schoolCode).collection('transactions').add({
+      dueId: dueId,
+      studentId: studentId,
+      studentName: dueData.studentName || '',
+      className: dueData.className || '',
+      razorpayOrderId: order.id,
+      razorpayPaymentId: null,
+      amount: dueData.amount,
+      currency: 'INR',
+      status: 'created',
+      failureReason: null,
+      refundId: null,
+      refundReason: null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      schoolCode: schoolCode,
+    });
+
+    // Return order details to the Flutter client
+    return {
+      orderId: order.id,
+      amount: amountInPaise,
+      currency: 'INR',
+      keyId: keyId,
+    };
+
+  } catch (error) {
+    console.error('Error creating Razorpay order:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', `Failed to create payment order: ${error.message}`);
+  }
+});
+
+// ─── 2. Verify Razorpay Payment (client-side supplementary) ────────────────
+// Called by the Flutter app after Razorpay checkout returns success.
+// This is a SUPPLEMENTARY verification. The webhook is the source of truth.
+exports.verifyRazorpayPayment = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { schoolCode, dueId, razorpayPaymentId, razorpayOrderId, razorpaySignature } = data;
+
+  if (!schoolCode || !dueId || !razorpayPaymentId || !razorpayOrderId || !razorpaySignature) {
+    throw new functions.https.HttpsError('invalid-argument', 'All payment verification fields are required');
+  }
+
+  try {
+    // Fetch school-specific Razorpay credentials for HMAC verification
+    const { keySecret } = await getRazorpayForSchool(schoolCode);
+    const generatedSignature = crypto
+      .createHmac('sha256', keySecret)
+      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+      .digest('hex');
+
+    if (generatedSignature !== razorpaySignature) {
+      console.error(`SIGNATURE MISMATCH for order ${razorpayOrderId}. Expected: ${generatedSignature}, Got: ${razorpaySignature}`);
+      throw new functions.https.HttpsError('permission-denied', 'Payment signature verification failed');
+    }
+
+    console.log(`Payment signature verified for order: ${razorpayOrderId}, payment: ${razorpayPaymentId}`);
+
+    // Mark the due as paid
+    const dueRef = db.collection('schools').doc(schoolCode).collection('student_dues').doc(dueId);
+    const dueDoc = await dueRef.get();
+
+    if (!dueDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Fee due not found');
+    }
+
+    const dueData = dueDoc.data();
+
+    // Only update if not already paid (idempotent)
+    if (dueData.status !== 'paid') {
+      await dueRef.update({
+        status: 'paid',
+        paidAt: admin.firestore.FieldValue.serverTimestamp(),
+        razorpayPaymentId: razorpayPaymentId,
+      });
+    }
+
+    // Update the transaction record
+    const txnSnapshot = await db.collection('schools').doc(schoolCode)
+      .collection('transactions')
+      .where('razorpayOrderId', '==', razorpayOrderId)
+      .limit(1)
+      .get();
+
+    if (!txnSnapshot.empty) {
+      await txnSnapshot.docs[0].ref.update({
+        status: 'captured',
+        razorpayPaymentId: razorpayPaymentId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    return { success: true, message: 'Payment verified and recorded' };
+
+  } catch (error) {
+    console.error('Error verifying payment:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', `Payment verification failed: ${error.message}`);
+  }
+});
+
+// ─── 3. Initiate Refund (admin only) ───────────────────────────────────────
+exports.initiateRefund = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  // Verify caller is an admin
+  const callerDoc = await db.collection('users').doc(context.auth.uid).get();
+  if (!callerDoc.exists || callerDoc.data().role !== 'admin') {
+    throw new functions.https.HttpsError('permission-denied', 'Only admins can initiate refunds');
+  }
+
+  const { schoolCode, dueId, reason } = data;
+
+  if (!schoolCode || !dueId || !reason) {
+    throw new functions.https.HttpsError('invalid-argument', 'schoolCode, dueId, and reason are required');
+  }
+
+  try {
+    const dueRef = db.collection('schools').doc(schoolCode).collection('student_dues').doc(dueId);
+    const dueDoc = await dueRef.get();
+
+    if (!dueDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Fee due not found');
+    }
+
+    const dueData = dueDoc.data();
+
+    if (dueData.status !== 'paid') {
+      throw new functions.https.HttpsError('failed-precondition', 'Can only refund paid fees');
+    }
+
+    if (!dueData.razorpayPaymentId) {
+      throw new functions.https.HttpsError('failed-precondition', 'No payment ID found for this due');
+    }
+
+    // Initiate refund via school-specific Razorpay API
+    const { razorpay } = await getRazorpayForSchool(schoolCode);
+    const refund = await razorpay.payments.refund(dueData.razorpayPaymentId, {
+      amount: Math.round(dueData.amount * 100), // full refund in paise
+      notes: {
+        reason: reason,
+        dueId: dueId,
+        schoolCode: schoolCode,
+      },
+    });
+
+    console.log(`Refund initiated: ${refund.id} for payment: ${dueData.razorpayPaymentId}`);
+
+    // Mark due as refund_initiated
+    await dueRef.update({
+      status: 'refund_initiated',
+      note: `Refund initiated: ${reason}`,
+    });
+
+    // Update transaction record
+    const txnSnapshot = await db.collection('schools').doc(schoolCode)
+      .collection('transactions')
+      .where('razorpayPaymentId', '==', dueData.razorpayPaymentId)
+      .limit(1)
+      .get();
+
+    if (!txnSnapshot.empty) {
+      await txnSnapshot.docs[0].ref.update({
+        status: 'refund_initiated',
+        refundId: refund.id,
+        refundReason: reason,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    return { success: true, refundId: refund.id, message: 'Refund initiated successfully' };
+
+  } catch (error) {
+    console.error('Error initiating refund:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', `Refund failed: ${error.message}`);
+  }
+});
+
+// ─── 4. Razorpay Webhook (server-to-server, signature-verified) ────────────
+// This is an HTTPS function (NOT onCall) — Razorpay POSTs here directly.
+// Configure this URL in Razorpay Dashboard → Settings → Webhooks.
+// Events to enable: payment.captured, payment.failed, refund.processed
+exports.razorpayWebhook = functions.https.onRequest(async (req, res) => {
+  if (req.method !== 'POST') {
+    return res.status(405).send('Method Not Allowed');
+  }
+
+  try {
+    const receivedSignature = req.headers['x-razorpay-signature'];
+
+    if (!receivedSignature) {
+      console.error('WEBHOOK: Missing x-razorpay-signature header');
+      return res.status(400).send('Missing signature');
+    }
+
+    const event = req.body.event;
+    const payload = req.body.payload;
+
+    // Extract schoolCode from the payment/refund notes to look up the correct webhook secret
+    let schoolCode = null;
+    try {
+      if (payload.payment) {
+        schoolCode = (payload.payment.entity.notes || {}).schoolCode;
+      } else if (payload.refund) {
+        schoolCode = (payload.refund.entity.notes || {}).schoolCode;
+      }
+    } catch (e) {
+      console.error('WEBHOOK: Could not extract schoolCode from payload notes');
+    }
+
+    if (!schoolCode) {
+      console.error('WEBHOOK: No schoolCode found in notes. Cannot verify signature.');
+      return res.status(400).send('Missing schoolCode in notes');
+    }
+
+    // Fetch the school-specific webhook secret from Firestore
+    const secretsDoc = await db.collection('schools').doc(schoolCode)
+      .collection('settings').doc('payment_secrets').get();
+
+    if (!secretsDoc.exists || !secretsDoc.data().webhookSecret) {
+      console.error(`WEBHOOK: No webhook secret configured for school: ${schoolCode}`);
+      return res.status(400).send('Webhook secret not configured');
+    }
+
+    const webhookSecret = secretsDoc.data().webhookSecret;
+    const rawBody = JSON.stringify(req.body);
+    const expectedSignature = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(rawBody)
+      .digest('hex');
+
+    if (expectedSignature !== receivedSignature) {
+      console.error(`WEBHOOK: Signature mismatch for school: ${schoolCode}. Rejecting.`);
+      return res.status(400).send('Invalid signature');
+    }
+
+    console.log(`WEBHOOK: Signature verified for school: ${schoolCode}`);
+
+    if (!event || !payload) {
+      return res.status(400).send('Invalid payload');
+    }
+
+    switch (event) {
+      case 'payment.captured': {
+        const payment = payload.payment.entity;
+        const orderId = payment.order_id;
+        const paymentId = payment.id;
+        const notes = payment.notes || {};
+        const schoolCode = notes.schoolCode;
+        const dueId = notes.dueId;
+
+        if (!schoolCode || !dueId) {
+          console.error('WEBHOOK payment.captured: Missing schoolCode or dueId in notes');
+          return res.status(200).send('OK (missing notes)');
+        }
+
+        console.log(`WEBHOOK payment.captured: order=${orderId}, payment=${paymentId}, due=${dueId}`);
+
+        // Mark due as paid
+        const dueRef = db.collection('schools').doc(schoolCode).collection('student_dues').doc(dueId);
+        const dueDoc = await dueRef.get();
+
+        if (dueDoc.exists && dueDoc.data().status !== 'paid') {
+          await dueRef.update({
+            status: 'paid',
+            paidAt: admin.firestore.FieldValue.serverTimestamp(),
+            razorpayPaymentId: paymentId,
+          });
+        }
+
+        // Update transaction
+        const txnSnapshot = await db.collection('schools').doc(schoolCode)
+          .collection('transactions')
+          .where('razorpayOrderId', '==', orderId)
+          .limit(1)
+          .get();
+
+        if (!txnSnapshot.empty) {
+          await txnSnapshot.docs[0].ref.update({
+            status: 'captured',
+            razorpayPaymentId: paymentId,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+
+        // Notify Admins of the payment
+        try {
+          const adminsSnapshot = await db.collection('users')
+            .where('school_code', '==', schoolCode)
+            .where('role', '==', 'admin')
+            .get();
+          
+          let studentName = 'A student';
+          if (notes.studentId) {
+            const studentDoc = await db.collection('users').doc(notes.studentId).get();
+            if (studentDoc.exists) {
+               studentName = studentDoc.data().full_name || studentDoc.data().username || 'A student';
+            }
+          }
+
+          const adminTokens = [];
+          adminsSnapshot.forEach(doc => {
+            const tokens = doc.data().fcm_tokens || [];
+            adminTokens.push(...tokens);
+          });
+
+          if (adminTokens.length > 0) {
+            const amountInRupees = (payment.amount / 100).toFixed(0);
+            for (const token of adminTokens) {
+              await admin.messaging().send({
+                token: token,
+                notification: {
+                  title: '💳 Fee Received',
+                  body: `${studentName} has just successfully paid ₹${amountInRupees}.`,
+                },
+                data: {
+                  type: 'fee_payment_success',
+                  dueId: dueId,
+                },
+              }).catch(e => console.error('Admin FCM send error:', e));
+            }
+          }
+        } catch (adminNotifyErr) {
+          console.error('Error notifying admins of payment:', adminNotifyErr);
+        }
+
+        // Send FCM notification to student
+        try {
+          const studentId = notes.studentId;
+          if (studentId) {
+            const studentDoc = await db.collection('users').doc(studentId).get();
+            if (studentDoc.exists) {
+              const tokens = studentDoc.data().fcm_tokens || [];
+              for (const token of tokens) {
+                try {
+                  await admin.messaging().send({
+                    token: token,
+                    notification: {
+                      title: '✅ Payment Successful!',
+                      body: `Your fee payment of ₹${(payment.amount / 100).toFixed(0)} has been confirmed.`,
+                    },
+                    data: {
+                      type: 'fee_payment_success',
+                      dueId: dueId,
+                    },
+                  });
+                } catch (tokenErr) {
+                  console.error('Error sending FCM:', tokenErr);
+                }
+              }
+            }
+          }
+        } catch (fcmErr) {
+          console.error('FCM notification error (non-critical):', fcmErr);
+        }
+
+        break;
+      }
+
+      case 'payment.failed': {
+        const payment = payload.payment.entity;
+        const orderId = payment.order_id;
+        const notes = payment.notes || {};
+        const schoolCode = notes.schoolCode;
+        const dueId = notes.dueId;
+        const errorDesc = payment.error_description || 'Payment failed';
+
+        if (!schoolCode || !dueId) {
+          return res.status(200).send('OK (missing notes)');
+        }
+
+        console.log(`WEBHOOK payment.failed: order=${orderId}, due=${dueId}, reason=${errorDesc}`);
+
+        // Update transaction with failure reason (due status stays pending)
+        const txnSnapshot = await db.collection('schools').doc(schoolCode)
+          .collection('transactions')
+          .where('razorpayOrderId', '==', orderId)
+          .limit(1)
+          .get();
+
+        if (!txnSnapshot.empty) {
+          await txnSnapshot.docs[0].ref.update({
+            status: 'failed',
+            failureReason: errorDesc,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+
+        break;
+      }
+
+      case 'refund.processed': {
+        const refund = payload.refund.entity;
+        const paymentId = refund.payment_id;
+        const notes = refund.notes || {};
+        const schoolCode = notes.schoolCode;
+        const dueId = notes.dueId;
+
+        if (!schoolCode || !dueId) {
+          return res.status(200).send('OK (missing notes)');
+        }
+
+        console.log(`WEBHOOK refund.processed: payment=${paymentId}, due=${dueId}`);
+
+        // Mark due as refunded
+        const dueRef = db.collection('schools').doc(schoolCode).collection('student_dues').doc(dueId);
+        await dueRef.update({
+          status: 'refunded',
+        });
+
+        // Update transaction
+        const txnSnapshot = await db.collection('schools').doc(schoolCode)
+          .collection('transactions')
+          .where('razorpayPaymentId', '==', paymentId)
+          .limit(1)
+          .get();
+
+        if (!txnSnapshot.empty) {
+          await txnSnapshot.docs[0].ref.update({
+            status: 'refunded',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+
+        // Send FCM to student about refund
+        try {
+          const studentId = notes.studentId;
+          if (studentId) {
+            const studentDoc = await db.collection('users').doc(studentId).get();
+            if (studentDoc.exists) {
+              const tokens = studentDoc.data().fcm_tokens || [];
+              for (const token of tokens) {
+                try {
+                  await admin.messaging().send({
+                    token: token,
+                    notification: {
+                      title: '💰 Refund Processed',
+                      body: `Your refund of ₹${(refund.amount / 100).toFixed(0)} has been processed. It will reflect in your bank in 5-7 business days.`,
+                    },
+                    data: {
+                      type: 'fee_refund_processed',
+                      dueId: dueId,
+                    },
+                  });
+                } catch (tokenErr) {
+                  console.error('Error sending refund FCM:', tokenErr);
+                }
+              }
+            }
+          }
+        } catch (fcmErr) {
+          console.error('Refund FCM error (non-critical):', fcmErr);
+        }
+
+        break;
+      }
+
+      default:
+        console.log(`WEBHOOK: Unhandled event type: ${event}`);
+    }
+
+    return res.status(200).send('OK');
+
+  } catch (error) {
+    console.error('WEBHOOK error:', error);
+    return res.status(500).send('Internal Server Error');
+  }
+});
+
+// ─── 5. Send Fee Reminder (admin callable) ─────────────────────────────────
+exports.sendFeeReminder = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { schoolCode, dueId, studentId } = data;
+
+  if (!schoolCode || !dueId || !studentId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing required fields');
+  }
+
+  try {
+    // Fetch the due details
+    const dueDoc = await db.collection('schools').doc(schoolCode)
+      .collection('student_dues').doc(dueId).get();
+
+    if (!dueDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Due not found');
+    }
+
+    const dueData = dueDoc.data();
+
+    // Send FCM notification
+    const studentDoc = await db.collection('users').doc(studentId).get();
+    if (studentDoc.exists) {
+      const tokens = studentDoc.data().fcm_tokens || [];
+      if (tokens.length === 0) {
+        return { success: false, message: 'Cannot send push: Student has not logged in to the app yet.' };
+      }
+      for (const token of tokens) {
+        try {
+          await admin.messaging().send({
+            token: token,
+            notification: {
+              title: '⏰ Fee Payment Reminder',
+              body: `Your ${dueData.installmentLabel} fee of ₹${dueData.amount} is ${dueData.status === 'overdue' ? 'overdue' : 'due soon'}. Please pay at the earliest.`,
+            },
+            data: {
+              type: 'fee_reminder',
+              dueId: dueId,
+            },
+          });
+        } catch (tokenErr) {
+          console.error('Error sending reminder FCM:', tokenErr);
+        }
+      }
+      return { success: true, message: 'Push notification sent to student!' };
+    } else {
+      return { success: false, message: 'Student account not found.' };
+    }
+
+  } catch (error) {
+    console.error('Error sending fee reminder:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', `Failed to send reminder: ${error.message}`);
+  }
+});

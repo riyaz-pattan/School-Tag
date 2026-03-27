@@ -1445,9 +1445,9 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
             child: GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 7,
-                childAspectRatio: 1.0,
+                childAspectRatio: MediaQuery.of(context).size.width < 380 ? 0.8 : 1.0,
                 mainAxisSpacing: 4,
                 crossAxisSpacing: 4,
               ),

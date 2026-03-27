@@ -1257,7 +1257,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                 crossAxisCount: crossAxisCount,
                 mainAxisSpacing: 32,
                 crossAxisSpacing: 16,
-                childAspectRatio: 0.8,
+                childAspectRatio: constraints.maxWidth < 340 ? 0.7 : 0.8,
                 children: [
                   _buildFlatAppIcon(
                     'Schools',

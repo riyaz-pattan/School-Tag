@@ -2,6 +2,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -10,6 +11,10 @@ class FCMService {
       FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin
   _flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+  static final StreamController<String> _onNotificationTappedController = StreamController<String>.broadcast();
+  static Stream<String> get onNotificationTapped => _onNotificationTappedController.stream;
+  static String? pendingRouteType;
 
   // Background message handler - must be static or top-level function
   static Future<void> _firebaseMessagingBackgroundHandler(
@@ -155,7 +160,7 @@ class FCMService {
         message.notification?.title ?? 'New Message',
         message.notification?.body ?? 'You have a new notification',
         platformChannelSpecifics,
-        payload: message.data.toString(),
+        payload: message.data['type']?.toString() ?? '',
       );
     } catch (e) {
       print('Error showing notification: $e');
@@ -164,42 +169,18 @@ class FCMService {
 
   static void _handleMessage(RemoteMessage message) {
     print('Handling message: ${message.data}');
-    // Navigate to appropriate screen based on message type
-    final data = message.data;
-    final type = data['type'];
-
-    switch (type) {
-      case 'notice':
-        print('Navigate to notices screen');
-        break;
-      case 'announcement':
-        print('Navigate to announcements screen');
-        break;
-      case 'assignment':
-        print('Navigate to assignments screen');
-        break;
-      case 'message': // ADD THIS CASE
-        print('Navigate to messages screen');
-        // You might want to navigate to messages screen
-        // This would require a navigation service or context
-        break;
-      default:
-        print('Unknown message type: $type');
+    final type = message.data['type']?.toString();
+    if (type != null && type.isNotEmpty) {
+      pendingRouteType = type;
+      _onNotificationTappedController.add(type);
     }
   }
 
-  // Also update the _handleNotificationTap method:
   static void _handleNotificationTap(String? payload) {
     print('Notification tapped with payload: $payload');
-    // Handle notification tap - you can navigate to specific screens here
-    // Parse payload and navigate to messages screen if it's a message notification
-    try {
-      if (payload != null && payload.contains('type')) {
-        // You would need to implement navigation logic here
-        // This typically requires a global navigation key or service
-      }
-    } catch (e) {
-      print('Error handling notification tap: $e');
+    if (payload != null && payload.isNotEmpty) {
+      pendingRouteType = payload;
+      _onNotificationTappedController.add(payload);
     }
   }
 

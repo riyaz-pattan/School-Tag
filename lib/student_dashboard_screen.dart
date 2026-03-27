@@ -12,10 +12,12 @@ import 'services/fcm_service.dart';
 import 'school_code_screen.dart';
 import 'student_view_exam_schedule_screen.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'messages_screen.dart';
 import 'student_performance_screen.dart';
 import 'ai_chat_screen.dart';
 import 'widgets/dashboard_skeleton.dart';
+import 'student_fee_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   final String userId;
@@ -35,6 +37,7 @@ class StudentDashboardScreen extends StatefulWidget {
 class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   int _currentIndex = 0;
   Map<String, dynamic>? _studentData;
+  StreamSubscription<String>? _fcmSubscription;
   bool _isLoading = true;
   String? _errorMessage;
   String _studentName = '';
@@ -261,6 +264,39 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       widget.userId,
       'student',
     );
+
+    // Initial check in case the app was opened via a notification tap
+    if (FCMService.pendingRouteType != null) {
+      _routeFromNotification(FCMService.pendingRouteType!);
+      FCMService.pendingRouteType = null;
+    }
+
+    // Subscribe to runtime taps
+    _fcmSubscription ??= FCMService.onNotificationTapped.listen((type) {
+      _routeFromNotification(type);
+    });
+  }
+
+  void _routeFromNotification(String type) {
+    if (!mounted) return;
+    switch (type) {
+      case 'fee_reminder':
+      case 'fee_payment_success':
+      case 'fee_refund_processed':
+        _navigateToFees();
+        break;
+      case 'notice':
+      case 'announcement':
+      case 'manual':
+        _navigateToNotices();
+        break;
+      case 'assignment':
+        _navigateToAssignments();
+        break;
+      case 'message':
+        _navigateToMessages();
+        break;
+    }
   }
 
   Future<void> _loadStudentData() async {
@@ -389,6 +425,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   @override
   void dispose() {
+    _fcmSubscription?.cancel();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     _currentPasswordController.dispose();
@@ -913,6 +950,20 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           studentName: _studentName,
           studentClassId: _studentClassId,
           studentLevel: _studentLevel,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToFees() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StudentFeeScreen(
+          userId: widget.userId,
+          schoolCode: widget.schoolCode,
+          schoolName: widget.schoolName,
+          studentName: _studentName,
         ),
       ),
     );
@@ -2263,7 +2314,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 crossAxisCount: crossAxisCount,
                 mainAxisSpacing: 32,
                 crossAxisSpacing: 16,
-                childAspectRatio: 0.8,
+                childAspectRatio: constraints.maxWidth < 340 ? 0.7 : 0.8,
                 children: [
                   _buildPremiumAppIcon(
                     'Timetable',
@@ -2325,6 +2376,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     Icons.auto_awesome,
                     Colors.indigo,
                     _navigateToAIChat,
+                  ),
+                  _buildPremiumAppIcon(
+                    'Fees',
+                    Icons.account_balance_wallet,
+                    Colors.green,
+                    _navigateToFees,
                   ),
                 ],
               );

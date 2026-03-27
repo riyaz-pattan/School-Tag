@@ -296,7 +296,7 @@ class _AdminManageUsersScreenState extends State<AdminManageUsersScreen> {
               children: [
                 Icon(Icons.error, color: Colors.white, size: 20),
                 SizedBox(width: 8),
-                Text('Error refreshing data: ${e.toString()}'),
+                Expanded(child: Text('Error refreshing data: ${e.toString()}')),
               ],
             ),
             backgroundColor: Colors.red,

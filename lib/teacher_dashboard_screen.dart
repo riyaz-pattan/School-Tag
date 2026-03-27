@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'attendance_screen.dart';
 import 'teacher_notices_screen.dart';
 import 'teacher_assignments_screen.dart';
@@ -37,6 +38,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
   Map<String, dynamic> _schoolSettings = {};
   Map<String, dynamic> _teacherData = {};
   bool _isLoading = true;
+  StreamSubscription<String>? _fcmSubscription;
   String _teacherName = '';
   String? _errorMessage;
   bool _isRefreshing = false;
@@ -117,6 +119,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
 
   @override
   void dispose() {
+    _fcmSubscription?.cancel();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     _currentPasswordController.dispose();
@@ -249,6 +252,34 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
       widget.userId,
       'teacher',
     );
+
+    // Initial check in case the app was opened via a notification tap
+    if (FCMService.pendingRouteType != null) {
+      _routeFromNotification(FCMService.pendingRouteType!);
+      FCMService.pendingRouteType = null;
+    }
+
+    // Subscribe to runtime taps
+    _fcmSubscription ??= FCMService.onNotificationTapped.listen((type) {
+      _routeFromNotification(type);
+    });
+  }
+
+  void _routeFromNotification(String type) {
+    if (!mounted) return;
+    switch (type) {
+      case 'notice':
+      case 'announcement':
+      case 'manual':
+        _navigateToNotices();
+        break;
+      case 'assignment':
+        _navigateToAssignments();
+        break;
+      case 'message':
+        _navigateToMessages();
+        break;
+    }
   }
 
   Future<void> _loadTeacherData() async {
@@ -1687,7 +1718,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: 24,
             crossAxisSpacing: 16,
-            childAspectRatio: 0.75,
+            childAspectRatio: MediaQuery.of(context).size.width < 350 ? 0.65 : 0.75,
             children: [
               _buildModernAppIcon(
                 'Attendance',

@@ -20,6 +20,8 @@ import 'create_exam_schedule_screen.dart';
 import 'package:flutter/services.dart';
 import 'messages_screen.dart';
 import 'widgets/dashboard_skeleton.dart';
+import 'admin_fee_structure_screen.dart';
+import 'dart:async';
 
 class AdminDashboardScreen extends StatefulWidget {
   final String userId;
@@ -60,6 +62,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   late Animation<double> _fadeInAnimation;
   // Dispose protection
   bool _isDisposed = false;
+  StreamSubscription<String>? _fcmSubscription;
 
   @override
   void initState() {
@@ -82,6 +85,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void dispose() {
     _isDisposed = true;
+    _fcmSubscription?.cancel();
     print('Dashboard disposed');
     _fadeController.dispose();
     _newPasswordController.dispose();
@@ -174,6 +178,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       widget.userId,
       'admin',
     );
+
+    // Initial check in case the app was opened via a notification tap
+    if (FCMService.pendingRouteType != null) {
+      _routeFromNotification(FCMService.pendingRouteType!);
+      FCMService.pendingRouteType = null;
+    }
+
+    // Subscribe to runtime taps
+    _fcmSubscription ??= FCMService.onNotificationTapped.listen((type) {
+      _routeFromNotification(type);
+    });
+  }
+
+  void _routeFromNotification(String type) {
+    if (!mounted || _isDisposed) return;
+    switch (type) {
+      case 'fee_payment_success':
+      case 'fee_refund_processed':
+        _navigateToFeeManagement();
+        break;
+      case 'notice':
+      case 'announcement':
+      case 'manual':
+        _navigateToNoticesAndAnnouncements();
+        break;
+      case 'message':
+        _navigateToMessages();
+        break;
+      case 'teacher_approval':
+      case 'student_approval':
+        _navigateToAdminManageUsers();
+        break;
+    }
   }
 
   Future<void> _loadDashboardData() async {
@@ -814,6 +851,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         builder: (context) => CreateExamScheduleScreen(
           schoolCode: widget.schoolCode,
           schoolName: widget.schoolName,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToFeeManagement() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AdminFeeStructureScreen(
+          schoolCode: widget.schoolCode,
+          schoolName: widget.schoolName,
+          adminId: widget.userId,
         ),
       ),
     );
@@ -1529,7 +1579,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 crossAxisCount: crossAxisCount,
                 mainAxisSpacing: 32,
                 crossAxisSpacing: 16,
-                childAspectRatio: 0.8,
+                childAspectRatio: constraints.maxWidth < 340 ? 0.7 : 0.8,
                 children: [
                   _buildFlatAppIcon(
                     'Classes',
@@ -1602,6 +1652,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     Icons.event_note,
                     Colors.pink,
                     _navigateToCreateExamSchedule,
+                  ),
+                  _buildFlatAppIcon(
+                    'Fee Mgmt',
+                    Icons.account_balance_wallet,
+                    Colors.green,
+                    _navigateToFeeManagement,
                   ),
                 ],
               );
