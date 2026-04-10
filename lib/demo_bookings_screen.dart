@@ -235,25 +235,26 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFF4FAFF),
       appBar: AppBar(
-        title: const Text('Demo Bookings'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.blue[800],
+        title: const Text('Demo Bookings', style: TextStyle(color: Color(0xFF001F2A), fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFFFFFFFF),
         elevation: 0,
-        surfaceTintColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: Color(0xFF00113A)),
         actions: [
           PopupMenuButton<String>(
-            icon: Icon(Icons.filter_list, color: Colors.blue[700]),
+            icon: const Icon(Icons.filter_list_rounded, color: Color(0xFF00113A)),
             tooltip: 'Filter by status',
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            color: const Color(0xFFFFFFFF),
             onSelected: (value) {
               setState(() => _filterStatus = value);
             },
             itemBuilder: (context) => [
-              _buildFilterItem('all', 'All Bookings', Icons.list),
-              _buildFilterItem('pending', 'Pending', Icons.schedule),
-              _buildFilterItem('contacted', 'Contacted', Icons.phone_in_talk),
-              _buildFilterItem('done', 'Done', Icons.check_circle),
+              _buildFilterItem('all', 'All Bookings', Icons.list_rounded),
+              _buildFilterItem('pending', 'Pending', Icons.schedule_rounded),
+              _buildFilterItem('contacted', 'Contacted', Icons.phone_in_talk_rounded),
+              _buildFilterItem('done', 'Done', Icons.check_circle_rounded),
             ],
           ),
         ],
@@ -262,13 +263,22 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
         children: [
           // Filter chip bar
           Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFFFF),
+              boxShadow: [
+                 BoxShadow(
+                   color: const Color(0xFF001F2A).withOpacity(0.04),
+                   blurRadius: 16,
+                   offset: const Offset(0, 4),
+                 ),
+              ],
+            ),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _buildFilterChip('all', 'All'),
+                  _buildFilterChip('all', 'All Bookings'),
                   const SizedBox(width: 8),
                   _buildFilterChip('pending', 'Pending'),
                   const SizedBox(width: 8),
@@ -279,7 +289,7 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
               ),
             ),
           ),
-          // Bookings list
+          
           Expanded(
             child: FadeTransition(
               opacity: _fadeAnimation,
@@ -290,7 +300,7 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Center(child: CircularProgressIndicator(color: Color(0xFF00113A)));
                   }
 
                   if (snapshot.hasError) {
@@ -298,15 +308,11 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.error_outline,
-                              size: 48, color: Colors.red[300]),
+                          const Icon(Icons.error_outline_rounded, size: 48, color: Colors.red),
                           const SizedBox(height: 12),
                           Text(
                             'Error loading bookings',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey[600],
-                            ),
+                            style: TextStyle(fontSize: 16, color: const Color(0xFF757682)),
                           ),
                         ],
                       ),
@@ -315,7 +321,6 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
 
                   final docs = snapshot.data?.docs ?? [];
 
-                  // Filter
                   final filteredDocs = _filterStatus == 'all'
                       ? docs
                       : docs.where((d) {
@@ -330,97 +335,55 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
                         children: [
                           Icon(
                             _filterStatus == 'all'
-                                ? Icons.calendar_today
+                                ? Icons.calendar_today_rounded
                                 : _statusIcon(_filterStatus),
-                            size: 56,
-                            color: Colors.grey[300],
+                            size: 64,
+                            color: const Color(0xFFC5C6D2),
                           ),
                           const SizedBox(height: 16),
                           Text(
                             _filterStatus == 'all'
                                 ? 'No demo bookings yet'
                                 : 'No ${_filterStatus} bookings',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[500],
-                            ),
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF001F2A)),
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            _filterStatus == 'all'
-                                ? 'Bookings from the website will appear here'
-                                : 'Try a different filter',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[400],
-                            ),
+                          const Text(
+                            'Bookings from the website will appear here',
+                            style: TextStyle(fontSize: 14, color: Color(0xFF757682)),
                           ),
                         ],
                       ),
                     );
                   }
 
-                  // Stats summary
-                  final pendingCount =
-                      docs.where((d) {
-                        final data = d.data() as Map<String, dynamic>;
-                        return data['status'] == 'pending';
-                      }).length;
-                  final contactedCount =
-                      docs.where((d) {
-                        final data = d.data() as Map<String, dynamic>;
-                        return data['status'] == 'contacted';
-                      }).length;
-                  final doneCount =
-                      docs.where((d) {
-                        final data = d.data() as Map<String, dynamic>;
-                        return data['status'] == 'done';
-                      }).length;
+                  final pendingCount = docs.where((d) => (d.data() as Map)['status'] == 'pending').length;
+                  final contactedCount = docs.where((d) => (d.data() as Map)['status'] == 'contacted').length;
+                  final doneCount = docs.where((d) => (d.data() as Map)['status'] == 'done').length;
 
                   return RefreshIndicator(
                     onRefresh: () async {
-                      // StreamBuilder auto-refreshes
                       await Future.delayed(const Duration(milliseconds: 500));
                     },
+                    color: const Color(0xFF00113A),
+                    backgroundColor: Colors.white,
                     child: ListView(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
                       children: [
-                        // Stats row
+                        // Premium Stats Row
                         Row(
                           children: [
-                            _buildMiniStat(
-                              'Total',
-                              docs.length.toString(),
-                              Colors.blue,
-                              Icons.list_alt,
-                            ),
-                            const SizedBox(width: 10),
-                            _buildMiniStat(
-                              'Pending',
-                              pendingCount.toString(),
-                              Colors.orange,
-                              Icons.schedule,
-                            ),
-                            const SizedBox(width: 10),
-                            _buildMiniStat(
-                              'Contacted',
-                              contactedCount.toString(),
-                              Colors.blue,
-                              Icons.phone_in_talk,
-                            ),
-                            const SizedBox(width: 10),
-                            _buildMiniStat(
-                              'Done',
-                              doneCount.toString(),
-                              Colors.green,
-                              Icons.check_circle,
-                            ),
+                            _buildMiniStat('Total', docs.length.toString(), const Color(0xFF00113A), Icons.list_alt_rounded),
+                            const SizedBox(width: 12),
+                            _buildMiniStat('Pending', pendingCount.toString(), Colors.orange, Icons.schedule_rounded),
+                            const SizedBox(width: 12),
+                            _buildMiniStat('Contacted', contactedCount.toString(), Colors.blue, Icons.phone_in_talk_rounded),
+                            const SizedBox(width: 12),
+                            _buildMiniStat('Done', doneCount.toString(), const Color(0xFF006D36), Icons.check_circle_rounded),
                           ],
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 24),
 
-                        // Booking cards
                         ...filteredDocs.map((doc) {
                           final data = doc.data() as Map<String, dynamic>;
                           return _buildBookingCard(doc.id, data);
@@ -442,15 +405,13 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
     return GestureDetector(
       onTap: () => setState(() => _filterStatus = value),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue[700] : Colors.grey[100],
+          color: isSelected ? const Color(0xFF00113A) : const Color(0xFFF4FAFF),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected
-                ? Colors.blue[700]!
-                : Colors.grey[300]!,
+            color: isSelected ? const Color(0xFF00113A) : const Color(0xFFE6F6FF),
           ),
         ),
         child: Text(
@@ -458,32 +419,26 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : Colors.grey[600],
+            color: isSelected ? Colors.white : const Color(0xFF757682),
           ),
         ),
       ),
     );
   }
 
-  PopupMenuEntry<String> _buildFilterItem(
-    String value,
-    String label,
-    IconData icon,
-  ) {
+  PopupMenuEntry<String> _buildFilterItem(String value, String label, IconData icon) {
+    final isSelected = _filterStatus == value;
     return PopupMenuItem<String>(
       value: value,
       child: Row(
         children: [
-          Icon(icon,
-              size: 20,
-              color: _filterStatus == value ? Colors.blue[700] : Colors.grey),
-          const SizedBox(width: 10),
+          Icon(icon, size: 20, color: isSelected ? const Color(0xFF00113A) : const Color(0xFF757682)),
+          const SizedBox(width: 12),
           Text(
             label,
             style: TextStyle(
-              fontWeight:
-                  _filterStatus == value ? FontWeight.w700 : FontWeight.w400,
-              color: _filterStatus == value ? Colors.blue[700] : null,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              color: isSelected ? const Color(0xFF001F2A) : const Color(0xFF001F2A),
             ),
           ),
         ],
@@ -491,45 +446,42 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
     );
   }
 
-  Widget _buildMiniStat(
-    String label,
-    String count,
-    Color color,
-    IconData icon,
-  ) {
+  Widget _buildMiniStat(String label, String count, Color color, IconData icon) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          color: const Color(0xFFFFFFFF),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: const Color(0xFF001F2A).withOpacity(0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Column(
           children: [
-            Icon(icon, size: 20, color: color),
-            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 18, color: color),
+            ),
+            const SizedBox(height: 12),
             Text(
               count,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: color,
-              ),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color),
             ),
+            const SizedBox(height: 2),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[500],
-              ),
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF757682)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -546,11 +498,9 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
 
     String formattedCreated = 'Unknown';
     if (createdAt != null) {
-      formattedCreated = DateFormat('MMM d, yyyy – h:mm a')
-          .format(createdAt.toDate().toLocal());
+      formattedCreated = DateFormat('MMM d, yyyy – h:mm a').format(createdAt.toDate().toLocal());
     }
 
-    // Format date display
     String formattedDate = date;
     try {
       final parsedDate = DateTime.parse(date);
@@ -558,92 +508,69 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
     } catch (_) {}
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFFFFFFFF),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF001F2A).withOpacity(0.05),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
           ),
         ],
-        border: Border.all(color: Colors.grey.withOpacity(0.08)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header row: email + status
             Row(
               children: [
                 Container(
-                  width: 42,
-                  height: 42,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    color: const Color(0xFFE6F6FF),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Icon(Icons.email_outlined,
-                      color: Colors.blue, size: 22),
+                  child: const Icon(Icons.email_rounded, color: Color(0xFF00113A), size: 24),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         email,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF001F2A)),
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
                         'Booked: $formattedCreated',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[400],
-                        ),
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF757682)),
                       ),
                     ],
                   ),
                 ),
-                // Status badge
                 GestureDetector(
                   onTap: () => _showStatusDialog(docId, status),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
                       color: _statusColor(status).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _statusColor(status).withOpacity(0.3),
-                      ),
+                      border: Border.all(color: _statusColor(status).withOpacity(0.2)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          _statusIcon(status),
-                          size: 14,
-                          color: _statusColor(status),
-                        ),
-                        const SizedBox(width: 4),
+                        Icon(_statusIcon(status), size: 14, color: _statusColor(status)),
+                        const SizedBox(width: 6),
                         Text(
                           status[0].toUpperCase() + status.substring(1),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: _statusColor(status),
-                          ),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _statusColor(status)),
                         ),
                       ],
                     ),
@@ -651,30 +578,24 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
                 ),
               ],
             ),
-            const SizedBox(height: 14),
-            // Date & Time row
+            const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(12),
+                color: const Color(0xFFF4FAFF),
+                borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: Row(
                       children: [
-                        Icon(Icons.calendar_today,
-                            size: 16, color: Colors.blue[400]),
+                        const Icon(Icons.calendar_today_rounded, size: 16, color: Color(0xFF00113A)),
                         const SizedBox(width: 8),
                         Flexible(
                           child: Text(
                             formattedDate,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[700],
-                            ),
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF001F2A)),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -683,73 +604,62 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
                   ),
                   Container(
                     width: 1,
-                    height: 20,
-                    color: Colors.grey[300],
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                    height: 24,
+                    color: const Color(0xFFC5C6D2),
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
                   ),
                   Row(
                     children: [
-                      Icon(Icons.access_time,
-                          size: 16, color: Colors.purple[400]),
+                      const Icon(Icons.access_time_rounded, size: 16, color: Color(0xFF399E9D)),
                       const SizedBox(width: 8),
                       Text(
                         time,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[700],
-                        ),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF001F2A)),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            // Actions
+            const SizedBox(height: 16),
             Row(
               children: [
                 if (status == 'pending') ...[
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _updateStatus(docId, 'contacted'),
-                      icon: const Icon(Icons.phone_in_talk, size: 16),
-                      label: const Text('Mark Contacted'),
+                      icon: const Icon(Icons.phone_in_talk_rounded, size: 18),
+                      label: const Text('Mark Contacted', style: TextStyle(fontWeight: FontWeight.bold)),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.blue[700],
-                        side: BorderSide(color: Colors.blue[200]!),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        foregroundColor: Colors.blue,
+                        side: const BorderSide(color: Colors.blue),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                 ],
                 if (status == 'contacted') ...[
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () => _updateStatus(docId, 'done'),
-                      icon: const Icon(Icons.check_circle, size: 16),
-                      label: const Text('Mark Done'),
+                      icon: const Icon(Icons.check_circle_rounded, size: 18),
+                      label: const Text('Mark Done', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green[600],
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        backgroundColor: const Color(0xFF006D36),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         elevation: 0,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                 ],
                 IconButton(
                   onPressed: () => _deleteBooking(docId),
-                  icon: Icon(Icons.delete_outline, color: Colors.red[300]),
-                  tooltip: 'Delete',
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                  tooltip: 'Delete Booking',
                 ),
               ],
             ),
@@ -758,4 +668,5 @@ class _DemoBookingsScreenState extends State<DemoBookingsScreen>
       ),
     );
   }
+
 }

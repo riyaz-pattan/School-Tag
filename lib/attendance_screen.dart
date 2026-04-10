@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'teacher_dashboard_screen.dart';
@@ -47,6 +48,9 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   List<Map<String, dynamic>> _attendanceHistory = [];
   String? _markedByTeacherName;
   String? _updatedByTeacherName;
+
+  // Leave applications map: studentId -> { reason, date, ... }
+  Map<String, Map<String, dynamic>> _leaveApplications = {};
 
   final Map<String, Map<String, dynamic>> _attendanceDocsByPeriod = {};
   late final String _attendanceType;
@@ -390,6 +394,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
       _attendanceMarked = false;
       _markedByTeacherName = null;
       _updatedByTeacherName = null;
+      _leaveApplications = {};
       _errorMessage = null;
       _successMessage = null;
     });
@@ -404,6 +409,7 @@ class _AttendanceScreenState extends State<AttendanceScreen>
     try {
       await _loadTimetablePeriodsForSelectedClass();
       await _loadExistingAttendanceDocsForSelectedClassDate();
+      await _loadLeaveApplications();
 
       if (_isToday || _attendanceDocsByPeriod.isNotEmpty) {
         await _loadStudentsForSelectedClass();
@@ -413,6 +419,48 @@ class _AttendanceScreenState extends State<AttendanceScreen>
       _showMessage('Error initializing class: $e', isError: true);
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadLeaveApplications() async {
+    if (_selectedClass == null) return;
+
+    final fullClassId = _selectedClass!['fullClassId'];
+    if (fullClassId == null) return;
+
+    final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+    try {
+      _logRead('schools/${widget.schoolCode}/leave_applications (query)');
+      final snapshot = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(widget.schoolCode)
+          .collection('leave_applications')
+          .where('class_id', isEqualTo: fullClassId)
+          .where('date', isEqualTo: dateStr)
+          .get();
+
+      final leaveMap = <String, Map<String, dynamic>>{};
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final studentId = data['student_id'] as String?;
+        if (studentId != null) {
+          leaveMap[studentId] = {
+            'type': data['type'] ?? 'Other',
+            'reason': data['reason'] ?? 'No reason provided',
+            'student_name': data['student_name'] ?? '',
+            'date': data['date'] ?? '',
+            'status': data['status'] ?? 'applied',
+            'attachment_url': data['attachment_url'],
+          };
+        }
+      }
+
+      setState(() {
+        _leaveApplications = leaveMap;
+      });
+      print('Loaded ${_leaveApplications.length} leave applications for date $dateStr');
+    } catch (e) {
+      print('Error loading leave applications: $e');
     }
   }
 
@@ -1329,6 +1377,11 @@ class _AttendanceScreenState extends State<AttendanceScreen>
   }
 
   Widget _buildStatusButton(String studentId) {
+    // Check for leave application
+    if (_leaveApplications.containsKey(studentId)) {
+      return _buildLeaveAppliedBadge(studentId);
+    }
+
     final status = _attendanceStatuses[studentId] ?? 'present';
     final isPresent = status == 'present';
 
@@ -1340,6 +1393,176 @@ class _AttendanceScreenState extends State<AttendanceScreen>
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
       child: Text(isPresent ? 'Present' : 'Absent'),
+    );
+  }
+
+  Widget _buildLeaveAppliedBadge(String studentId) {
+    final leaveData = _leaveApplications[studentId]!;
+    final type = leaveData['type'] as String? ?? 'Other';
+    final reason = leaveData['reason'] as String? ?? 'No reason';
+    final attachmentUrl = leaveData['attachment_url'] as String?;
+
+    return Tooltip(
+      message: '$type: $reason',
+      child: InkWell(
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4ECDC4).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.event_busy_rounded,
+                      color: Color(0xFF4ECDC4),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Leave Applied',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Student: ${leaveData['student_name'] ?? 'Unknown'}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Date: ${leaveData['date'] ?? ''}',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6C63FF).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      type,
+                      style: const TextStyle(color: Color(0xFF6C63FF), fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4ECDC4).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: const Color(0xFF4ECDC4).withOpacity(0.2),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Reason',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          reason,
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (attachmentUrl != null && attachmentUrl.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          launchUrl(Uri.parse(attachmentUrl));
+                        },
+                        icon: const Icon(Icons.attach_file, size: 18),
+                        label: const Text('View Attachment'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.blue,
+                          side: const BorderSide(color: Colors.blue),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ]
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF4ECDC4).withOpacity(0.15),
+                const Color(0xFF6C63FF).withOpacity(0.10),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: const Color(0xFF4ECDC4).withOpacity(0.3),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.event_busy_rounded,
+                color: Color(0xFF4ECDC4),
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'Leave Applied',
+                style: TextStyle(
+                  color: Color(0xFF4ECDC4),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.info_outline,
+                color: const Color(0xFF4ECDC4).withOpacity(0.7),
+                size: 14,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1977,25 +2200,27 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                 ),
                 title: Text(displayName),
                 subtitle: Text('ID: ${student['username']}'),
-                trailing: _isToday
-                    ? _buildStatusButton(studentId)
-                    : Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _getStatusColor(status),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          status == 'present' ? 'Present' : 'Absent',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                trailing: _leaveApplications.containsKey(studentId)
+                    ? _buildLeaveAppliedBadge(studentId)
+                    : _isToday
+                        ? _buildStatusButton(studentId)
+                        : Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getStatusColor(status),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              status == 'present' ? 'Present' : 'Absent',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
               ),
             );
           }).toList(),
@@ -2437,25 +2662,27 @@ class _AttendanceScreenState extends State<AttendanceScreen>
                   ),
                   title: Text(displayName),
                   subtitle: Text('ID: ${student['username']}'),
-                  trailing: _isToday
-                      ? _buildStatusButton(studentId)
-                      : Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _getStatusColor(status),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            status == 'present' ? 'Present' : 'Absent',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                  trailing: _leaveApplications.containsKey(studentId)
+                      ? _buildLeaveAppliedBadge(studentId)
+                      : _isToday
+                          ? _buildStatusButton(studentId)
+                          : Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _getStatusColor(status),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                status == 'present' ? 'Present' : 'Absent',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
                 ),
               );
             },

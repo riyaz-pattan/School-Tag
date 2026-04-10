@@ -1,5 +1,6 @@
 // admin_dashboard_screen.dart
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -115,13 +116,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
   // >>>>>>>>>>>>> ALL ORIGINAL LOGIC METHODS BELOW >>>>>>>>
   // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  int _getSafeInt(SharedPreferences prefs, String key) {
+    final val = prefs.get(key);
+    if (val is int) return val;
+    if (val is String) return int.tryParse(val) ?? 0;
+    return 0;
+  }
+
   Future<void> _initializeCache() async {
     final prefs = await SharedPreferences.getInstance();
-    _totalStudents = prefs.getInt('${widget.schoolCode}_students') ?? 0;
-    _totalTeachers = prefs.getInt('${widget.schoolCode}_teachers') ?? 0;
-    _totalClasses = prefs.getInt('${widget.schoolCode}_classes') ?? 0;
+    _totalStudents = _getSafeInt(prefs, '${widget.schoolCode}_students');
+    _totalTeachers = _getSafeInt(prefs, '${widget.schoolCode}_teachers');
+    _totalClasses = _getSafeInt(prefs, '${widget.schoolCode}_classes');
     _todayAttendanceCount =
-        prefs.getInt('${widget.schoolCode}_attendance') ?? 0;
+        _getSafeInt(prefs, '${widget.schoolCode}_attendance');
     final lastFetch = prefs.getString('${widget.schoolCode}_last_fetch');
     if (lastFetch != null) {
       _lastDataFetchTime = DateTime.parse(lastFetch);
@@ -1322,7 +1330,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     return SliverToBoxAdapter(
       child: Container(
         padding: const EdgeInsets.only(
-          top: 60,
+          top: 30,
           left: 24,
           right: 24,
           bottom: 32,
@@ -1355,7 +1363,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Welcome, $_adminName 👋',
+                      '${_getGreeting()},',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withOpacity(0.8),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Hi, $_adminName 👋',
                       style: const TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
@@ -1549,7 +1566,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 letterSpacing: -0.5,
               ),
             ),
-            Icon(Icons.more_horiz, color: Colors.grey[400]),
           ],
         ),
         const SizedBox(height: 20),
@@ -1577,86 +1593,73 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: crossAxisCount,
-                mainAxisSpacing: 32,
+                mainAxisSpacing: 12,
                 crossAxisSpacing: 16,
                 childAspectRatio: constraints.maxWidth < 340 ? 0.7 : 0.8,
                 children: [
                   _buildFlatAppIcon(
                     'Classes',
-                    Icons.class_,
-                    Colors.blue,
+                    'classroom',
                     _navigateToClassManagement,
                   ),
                   _buildFlatAppIcon(
                     'Settings',
-                    Icons.settings,
-                    Colors.purple,
+                    'settings',
                     _navigateToSchoolSettings,
                   ),
                   _buildFlatAppIcon(
                     'Timetable',
-                    Icons.schedule,
-                    Colors.teal,
+                    'calendar',
                     _navigateToTimetableManagement,
                   ),
                   _buildFlatAppIcon(
                     'Add Users',
-                    Icons.person_add,
-                    Colors.orange,
+                    'add-user-male',
                     _navigateToAdminAddUsers,
                   ),
                   _buildFlatAppIcon(
                     'Manage Users',
-                    Icons.people,
-                    Colors.green,
+                    'management',
                     _navigateToAdminManageUsers,
                   ),
                   _buildFlatAppIcon(
                     'Reports',
-                    Icons.analytics,
-                    Colors.indigo,
+                    'bar-chart',
                     _viewSchoolReports,
                   ),
                   _buildFlatAppIcon(
                     'Notices',
-                    Icons.campaign,
-                    Colors.red,
+                    'megaphone',
                     _navigateToNoticesAndAnnouncements,
                   ),
                   _buildFlatAppIcon(
                     'Message',
-                    Icons.chat_bubble_outline,
-                    Colors.lightBlue,
+                    'speech-bubble-with-dots',
                     _navigateToMessages,
                   ),
                   _buildFlatAppIcon(
                     'Students',
-                    Icons.school,
-                    Colors.deepPurple,
+                    'student-male',
                     _navigateToStudentManagement,
                   ),
                   _buildFlatAppIcon(
                     'Subjects',
-                    Icons.menu_book,
-                    Colors.brown,
+                    'book-stack',
                     _navigateToManageSubjects,
                   ),
                   _buildFlatAppIcon(
                     'Manage Exams',
-                    Icons.assignment_turned_in,
-                    Colors.deepOrange,
+                    'exam',
                     _navigateToManageExams,
                   ),
                   _buildFlatAppIcon(
                     'Exam Schedule',
-                    Icons.event_note,
-                    Colors.pink,
+                    'schedule',
                     _navigateToCreateExamSchedule,
                   ),
                   _buildFlatAppIcon(
                     'Fee Mgmt',
-                    Icons.account_balance_wallet,
-                    Colors.green,
+                    'wallet',
                     _navigateToFeeManagement,
                   ),
                 ],
@@ -1670,12 +1673,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
   Widget _buildFlatAppIcon(
     String label,
-    IconData icon,
-    MaterialColor colorSwatch,
+    String iconName,
     VoidCallback onTap,
   ) {
-    Color primaryColor = colorSwatch[600] ?? colorSwatch;
-
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
@@ -1688,14 +1688,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               height: 64,
               width: 64,
               decoration: BoxDecoration(
-                color: colorSwatch[50] ?? primaryColor.withOpacity(0.12),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Center(
-                child: Icon(
-                  icon, 
-                  color: primaryColor, 
-                  size: 30,
+                child: CachedNetworkImage(
+                  imageUrl: 'https://img.icons8.com/fluency/96/000000/$iconName.png',
+                  width: 34,
+                  height: 34,
+                  errorWidget: (context, url, error) =>
+                      const Icon(Icons.error_outline, color: Colors.grey),
                 ),
               ),
             ),
@@ -1743,7 +1752,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Welcome back, $_adminName!',
+                  '${_getGreeting()}, $_adminName!',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -1798,6 +1807,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ],
       ),
     );
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    if (hour < 21) return 'Good evening';
+    return 'Good night';
   }
 
   Widget _buildSchoolInfoCard() {

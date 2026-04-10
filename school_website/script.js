@@ -16,15 +16,15 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 // ══════════════════════════════════
-// PARTICLE ANIMATION
+// PARTICLE ANIMATION — warm theme
 // ══════════════════════════════════
 (function initParticles() {
   const canvas = document.getElementById("particles-canvas");
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   let particles = [];
-  const PARTICLE_COUNT = 60;
-  const CONNECT_DIST = 140;
+  const PARTICLE_COUNT = 50;
+  const CONNECT_DIST = 130;
   let mouseX = -1000, mouseY = -1000;
   let w, h;
 
@@ -45,14 +45,24 @@ const db = firebase.firestore();
     mouseY = -1000;
   });
 
+  // Warm color palette for particles
+  const particleColors = [
+    { r: 249, g: 115, b: 22 },   // orange
+    { r: 251, g: 191, b: 36 },   // yellow
+    { r: 37, g: 99, b: 235 },    // blue
+    { r: 139, g: 92, b: 246 },   // purple
+  ];
+
   for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const color = particleColors[Math.floor(Math.random() * particleColors.length)];
     particles.push({
       x: Math.random() * w,
       y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.5,
-      vy: (Math.random() - 0.5) * 0.5,
-      r: Math.random() * 2 + 1,
-      opacity: Math.random() * 0.5 + 0.2,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+      r: Math.random() * 2.5 + 1,
+      opacity: Math.random() * 0.25 + 0.08,
+      color: color,
     });
   }
 
@@ -67,7 +77,7 @@ const db = firebase.firestore();
 
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(108,99,255,${p.opacity})`;
+      ctx.fillStyle = `rgba(${p.color.r},${p.color.g},${p.color.b},${p.opacity})`;
       ctx.fill();
 
       // Connect nearby particles
@@ -80,8 +90,8 @@ const db = firebase.firestore();
           ctx.beginPath();
           ctx.moveTo(p.x, p.y);
           ctx.lineTo(p2.x, p2.y);
-          ctx.strokeStyle = `rgba(108,99,255,${0.12 * (1 - dist / CONNECT_DIST)})`;
-          ctx.lineWidth = 0.6;
+          ctx.strokeStyle = `rgba(249,115,22,${0.06 * (1 - dist / CONNECT_DIST)})`;
+          ctx.lineWidth = 0.5;
           ctx.stroke();
         }
       }
@@ -90,12 +100,12 @@ const db = firebase.firestore();
       const mDx = p.x - mouseX;
       const mDy = p.y - mouseY;
       const mDist = Math.sqrt(mDx * mDx + mDy * mDy);
-      if (mDist < 160) {
+      if (mDist < 150) {
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
         ctx.lineTo(mouseX, mouseY);
-        ctx.strokeStyle = `rgba(0,212,255,${0.2 * (1 - mDist / 160)})`;
-        ctx.lineWidth = 0.8;
+        ctx.strokeStyle = `rgba(251,191,36,${0.15 * (1 - mDist / 150)})`;
+        ctx.lineWidth = 0.7;
         ctx.stroke();
       }
     }
@@ -142,42 +152,6 @@ const revealObserver = new IntersectionObserver(
 revealEls.forEach((el) => revealObserver.observe(el));
 
 // ══════════════════════════════════
-// ANIMATED COUNTERS
-// ══════════════════════════════════
-const counters = document.querySelectorAll(".stat-number[data-target]");
-let countersDone = false;
-
-function animateCounters() {
-  if (countersDone) return;
-  counters.forEach((counter) => {
-    const target = +counter.dataset.target;
-    const duration = 2000;
-    const start = performance.now();
-
-    function update(now) {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
-      // ease-out quart
-      const ease = 1 - Math.pow(1 - progress, 4);
-      const current = Math.floor(ease * target);
-      counter.textContent = current.toLocaleString() + (target === 99 ? "%" : "+");
-      if (progress < 1) requestAnimationFrame(update);
-    }
-    requestAnimationFrame(update);
-  });
-  countersDone = true;
-}
-
-const statsSection = document.getElementById("stats");
-const statsObserver = new IntersectionObserver(
-  (entries) => {
-    if (entries[0].isIntersecting) animateCounters();
-  },
-  { threshold: 0.3 }
-);
-if (statsSection) statsObserver.observe(statsSection);
-
-// ══════════════════════════════════
 // SET MIN DATE FOR DATE PICKER
 // ══════════════════════════════════
 const dateInput = document.getElementById("demo-date");
@@ -186,6 +160,111 @@ if (dateInput) {
   // Set min to tomorrow
   today.setDate(today.getDate() + 1);
   dateInput.min = today.toISOString().split("T")[0];
+}
+
+// ══════════════════════════════════
+// EMAIL & PHONE VALIDATION HELPERS
+// ══════════════════════════════════
+
+/**
+ * Validates email format:
+ *  - Must contain exactly one '@'
+ *  - Must have at least 1 character before '@'
+ *  - Must have at least 1 letter between '@' and '.'
+ *  - Must have a '.' after '@' with at least 1 letter between '@' and '.'
+ *  - Must have at least 2 characters after the last '.'
+ */
+function isValidEmail(email) {
+  // Basic structure check
+  if (!email || email.length < 5) return false;
+
+  const atIndex = email.indexOf("@");
+  const lastAtIndex = email.lastIndexOf("@");
+
+  // Must have exactly one '@'
+  if (atIndex === -1 || atIndex !== lastAtIndex) return false;
+
+  const localPart = email.substring(0, atIndex);
+  const domainPart = email.substring(atIndex + 1);
+
+  // Local part must have at least 1 character
+  if (localPart.length < 1) return false;
+
+  // Domain must have at least one '.'
+  const dotIndex = domainPart.indexOf(".");
+  if (dotIndex === -1) return false;
+
+  // Must be at least 1 letter between '@' and '.'
+  const beforeDot = domainPart.substring(0, dotIndex);
+  if (beforeDot.length < 1 || !/[a-zA-Z]/.test(beforeDot)) return false;
+
+  // Must have at least 2 characters after last '.'
+  const lastDotIndex = domainPart.lastIndexOf(".");
+  const afterDot = domainPart.substring(lastDotIndex + 1);
+  if (afterDot.length < 2 || !/^[a-zA-Z]+$/.test(afterDot)) return false;
+
+  // No spaces allowed
+  if (/\s/.test(email)) return false;
+
+  return true;
+}
+
+/**
+ * Validates Indian mobile number: exactly 10 digits, starts with 6-9
+ */
+function isValidPhone(phone) {
+  const cleaned = phone.replace(/\s/g, "");
+  return /^[6-9]\d{9}$/.test(cleaned);
+}
+
+// ── Live inline hints ──
+const emailInput = document.getElementById("demo-email");
+const phoneInput = document.getElementById("demo-phone");
+const emailHint = document.getElementById("email-hint");
+const phoneHint = document.getElementById("phone-hint");
+
+if (emailInput && emailHint) {
+  emailInput.addEventListener("input", () => {
+    const val = emailInput.value.trim();
+    if (!val) {
+      emailHint.textContent = "";
+      emailHint.className = "field-hint";
+    } else if (isValidEmail(val)) {
+      emailHint.textContent = "✓ Valid email";
+      emailHint.className = "field-hint success";
+    } else {
+      // Give specific feedback
+      if (!val.includes("@")) {
+        emailHint.textContent = "Email must contain '@'";
+      } else if (!val.includes(".")) {
+        emailHint.textContent = "Email must contain a '.' in the domain";
+      } else {
+        emailHint.textContent = "Enter a valid email (e.g. name@school.com)";
+      }
+      emailHint.className = "field-hint error";
+    }
+  });
+}
+
+if (phoneInput && phoneHint) {
+  // Only allow digits
+  phoneInput.addEventListener("input", () => {
+    phoneInput.value = phoneInput.value.replace(/\D/g, "").slice(0, 10);
+    const val = phoneInput.value;
+    if (!val) {
+      phoneHint.textContent = "";
+      phoneHint.className = "field-hint";
+    } else if (val.length < 10) {
+      phoneHint.textContent = `${10 - val.length} more digit${10 - val.length > 1 ? "s" : ""} needed`;
+      phoneHint.className = "field-hint error";
+    } else if (isValidPhone(val)) {
+      phoneHint.textContent = "✓ Valid mobile number";
+      phoneHint.className = "field-hint success";
+    } else {
+      phoneHint.textContent = "Must start with 6, 7, 8, or 9";
+      phoneHint.className = "field-hint error";
+    }
+  });
 }
 
 // ══════════════════════════════════
@@ -202,16 +281,35 @@ if (demoForm) {
     formError.classList.remove("show");
 
     const email = document.getElementById("demo-email").value.trim();
+    const phone = document.getElementById("demo-phone").value.trim();
     const date = document.getElementById("demo-date").value;
     const time = document.getElementById("demo-time").value;
 
-    // Validate
-    if (!email || !date || !time) {
+    // Validate all fields filled
+    if (!email || !phone || !date || !time) {
       showError("Please fill in all fields.");
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      showError("Please enter a valid email address.");
+
+    // Email validation
+    if (!isValidEmail(email)) {
+      if (!email.includes("@")) {
+        showError("Email must contain '@' symbol.");
+      } else if (!email.includes(".")) {
+        showError("Email must contain a '.' in the domain.");
+      } else {
+        showError("Please enter a valid email address (e.g. name@school.com).");
+      }
+      return;
+    }
+
+    // Phone validation
+    if (!isValidPhone(phone)) {
+      if (phone.length !== 10) {
+        showError("Mobile number must be exactly 10 digits.");
+      } else {
+        showError("Mobile number must start with 6, 7, 8, or 9.");
+      }
       return;
     }
 
@@ -223,6 +321,7 @@ if (demoForm) {
     try {
       await db.collection("demo_bookings").add({
         email: email,
+        phone: "+91" + phone,
         date: date,
         time: time,
         status: "pending",

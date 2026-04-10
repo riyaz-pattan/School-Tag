@@ -1,4 +1,3 @@
-// users_count_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -13,7 +12,7 @@ class UsersCountScreen extends StatefulWidget {
 
 class _UsersCountScreenState extends State<UsersCountScreen> {
   String? _selectedSchoolCode;
-  Map<String, String> _schools = {}; // schoolCode: schoolName
+  Map<String, String> _schools = {};
   Map<String, dynamic> _userCounts = {};
   bool _isLoading = false;
 
@@ -36,7 +35,6 @@ class _UsersCountScreenState extends State<UsersCountScreen> {
         };
       });
     } catch (e) {
-      print('Error fetching schools: $e');
       _showError('Error loading schools: $e');
     }
   }
@@ -65,7 +63,6 @@ class _UsersCountScreenState extends State<UsersCountScreen> {
         _showError('School not found');
       }
     } catch (e) {
-      print('Error fetching user counts: $e');
       _showError('Error loading user counts: $e');
     } finally {
       setState(() {
@@ -77,119 +74,163 @@ class _UsersCountScreenState extends State<UsersCountScreen> {
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline_rounded, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message, style: const TextStyle(fontWeight: FontWeight.bold))),
+          ],
+        ),
+        backgroundColor: const Color(0xFFBA1A1A),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Users Count by School'),
-        backgroundColor: Colors.blue[700],
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // School Selection
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Select School',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: _selectedSchoolCode,
-                      decoration: const InputDecoration(
-                        labelText: 'School',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.school),
-                      ),
-                      hint: const Text('Select a school'),
-                      items: _schools.entries.map((entry) {
-                        return DropdownMenuItem<String>(
-                          value: entry.key,
-                          child: Text(
-                            '${entry.value} (${entry.key})',
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          _selectedSchoolCode = newValue;
-                          _userCounts = {}; // Clear previous counts
-                        });
-                        if (newValue != null) {
-                          _fetchUserCounts(newValue);
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
+    final isDesktop = MediaQuery.of(context).size.width > 800;
 
-            // User Counts Display
-            if (_selectedSchoolCode != null) ...[
-              if (_isLoading)
-                const Center(child: CircularProgressIndicator())
-              else if (_userCounts.isNotEmpty)
-                _buildUserCountsCard()
-              else
-                _buildEmptyState(),
-            ] else
-              _buildInitialState(),
-          ],
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4FAFF),
+      appBar: AppBar(
+        title: const Text('User Analytics', style: TextStyle(color: Color(0xFF001F2A), fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFFFFFFFF),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF00113A)),
+      ),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(isDesktop ? 32 : 16),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFFFF),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF001F2A).withOpacity(0.06),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE6F6FF),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.apartment_rounded, color: Color(0xFF00113A)),
+                          ),
+                          const SizedBox(width: 16),
+                          const Text(
+                            'Select Demographic',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF001F2A)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        value: _selectedSchoolCode,
+                        icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF757682)),
+                        decoration: InputDecoration(
+                          labelText: 'School Location',
+                          labelStyle: const TextStyle(color: Color(0xFF757682)),
+                          prefixIcon: const Icon(Icons.account_balance_rounded, color: Color(0xFF757682)),
+                          filled: true,
+                          fillColor: const Color(0xFFF4FAFF),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: Color(0xFFE6F6FF), width: 1.5),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: Color(0xFF006D36), width: 2),
+                          ),
+                        ),
+                        items: _schools.entries.map((entry) {
+                          return DropdownMenuItem<String>(
+                            value: entry.key,
+                            child: Text(
+                              '${entry.value} (${entry.key})',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF001F2A)),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _selectedSchoolCode = newValue;
+                            _userCounts = {};
+                          });
+                          if (newValue != null) _fetchUserCounts(newValue);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                if (_selectedSchoolCode != null) ...[
+                  if (_isLoading)
+                    const Center(child: CircularProgressIndicator(color: Color(0xFF00113A)))
+                  else if (_userCounts.isNotEmpty)
+                    _buildUserCountsCard()
+                  else
+                    _buildEmptyState(),
+                ] else
+                  _buildInitialState(),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildInitialState() {
-    return Expanded(
-      child: Center(
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.analytics, size: 80, color: Colors.grey[400]),
-            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE6F6FF),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.analytics_rounded, size: 64, color: Color(0xFF00113A)),
+            ),
+            const SizedBox(height: 24),
             const Text(
-              'Select a school to view user counts',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
+              'Select a school to view user demographics',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF001F2A)),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'Total schools available: ${_schools.length}',
-              style: const TextStyle(fontSize: 14, color: Colors.grey),
+              'Total connected campuses: ${_schools.length}',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF757682)),
             ),
           ],
         ),
@@ -198,22 +239,22 @@ class _UsersCountScreenState extends State<UsersCountScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Expanded(
-      child: Center(
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.people_outline, size: 80, color: Colors.grey[400]),
-            const SizedBox(height: 16),
+            const Icon(Icons.no_accounts_rounded, size: 80, color: Color(0xFFC5C6D2)),
+            const SizedBox(height: 24),
             const Text(
-              'No user data found for this school',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
+              'No demographic data available',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF001F2A)),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'School: ${_schools[_selectedSchoolCode]}',
-              style: const TextStyle(fontSize: 14, color: Colors.grey),
+              'Location: ${_schools[_selectedSchoolCode]}',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF757682)),
             ),
           ],
         ),
@@ -228,272 +269,162 @@ class _UsersCountScreenState extends State<UsersCountScreen> {
     final studentCount = _userCounts['student_count'] ?? 0;
     final totalUsers = adminCount + teacherCount + studentCount;
 
-    return Expanded(
-      child: SingleChildScrollView(
-        child: Column(
+    return Column(
+      children: [
+        _buildCountCard(
+           'Total Enrolled Users',
+           totalUsers.toString(),
+           Icons.groups_rounded,
+           const Color(0xFF00113A),
+           'Combined network of all roles',
+        ),
+        const SizedBox(height: 16),
+        Row(
           children: [
-            // School Info Card
-            Card(
-              elevation: 3,
-              color: Colors.blue[50],
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    Icon(Icons.school, size: 40, color: Colors.blue[700]),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            schoolName ?? 'Unknown School',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue,
-                            ),
-                          ),
-                          Text(
-                            'School Code: $_selectedSchoolCode',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.blue,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Total Users Card
-            _buildCountCard(
-              'Total Users',
-              totalUsers.toString(),
-              Icons.people,
-              Colors.purple,
-              'All users in the school',
-            ),
-            const SizedBox(height: 16),
-
-            // Role-based Count Cards
-            Row(
-              children: [
-                Expanded(
-                  child: _buildRoleCountCard(
-                    'Admins',
-                    adminCount.toString(),
-                    Icons.admin_panel_settings,
-                    Colors.red,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildRoleCountCard(
-                    'Teachers',
-                    teacherCount.toString(),
-                    Icons.school,
-                    Colors.orange,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildRoleCountCard(
-              'Students',
-              studentCount.toString(),
-              Icons.person,
-              Colors.green,
-            ),
-            const SizedBox(height: 20),
-
-            // Statistics Section
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Statistics',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildStatItem(
-                      'Admins',
-                      adminCount,
-                      totalUsers,
-                      Colors.red,
-                    ),
-                    _buildStatItem(
-                      'Teachers',
-                      teacherCount,
-                      totalUsers,
-                      Colors.orange,
-                    ),
-                    _buildStatItem(
-                      'Students',
-                      studentCount,
-                      totalUsers,
-                      Colors.green,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+             Expanded(child: _buildRoleCountCard('Administrators', adminCount.toString(), Icons.admin_panel_settings_rounded, const Color(0xFF863489))),
+             const SizedBox(width: 16),
+             Expanded(child: _buildRoleCountCard('Educators/Teachers', teacherCount.toString(), Icons.assured_workload_rounded, const Color(0xFFD6602F))),
           ],
         ),
+        const SizedBox(height: 16),
+        _buildRoleCountCard('Students', studentCount.toString(), Icons.face_retouching_natural_rounded, const Color(0xFF006D36)),
+        const SizedBox(height: 32),
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+             color: const Color(0xFFFFFFFF),
+             borderRadius: BorderRadius.circular(24),
+             boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF001F2A).withOpacity(0.04),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+             ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+               const Text(
+                  'Distribution Ratios',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF001F2A)),
+               ),
+               const SizedBox(height: 24),
+               _buildStatItem('Admins', adminCount, totalUsers, const Color(0xFF863489)),
+               const SizedBox(height: 12),
+               _buildStatItem('Teachers', teacherCount, totalUsers, const Color(0xFFD6602F)),
+               const SizedBox(height: 12),
+               _buildStatItem('Students', studentCount, totalUsers, const Color(0xFF006D36)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCountCard(String title, String count, IconData icon, Color color, String subtitle) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFFFF),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+             color: const Color(0xFF001F2A).withOpacity(0.04),
+             blurRadius: 16,
+             offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          Container(
+             padding: const EdgeInsets.all(16),
+             decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                shape: BoxShape.circle,
+             ),
+             child: Icon(icon, size: 36, color: color),
+          ),
+          const SizedBox(height: 16),
+          Text(count, style: TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: color)),
+          const SizedBox(height: 4),
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF001F2A))),
+          const SizedBox(height: 8),
+          Text(subtitle, style: const TextStyle(fontSize: 13, color: Color(0xFF757682))),
+        ],
       ),
     );
   }
 
-  Widget _buildCountCard(
-    String title,
-    String count,
-    IconData icon,
-    Color color,
-    String subtitle,
-  ) {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            Container(
+  Widget _buildRoleCountCard(String role, String count, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+         color: const Color(0xFFFFFFFF),
+         borderRadius: BorderRadius.circular(20),
+         boxShadow: [
+            BoxShadow(
+               color: const Color(0xFF001F2A).withOpacity(0.04),
+               blurRadius: 16,
+               offset: const Offset(0, 4),
+            )
+         ],
+      ),
+      child: Row(
+        children: [
+           Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 32, color: color),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              count,
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRoleCountCard(
-    String role,
-    String count,
-    IconData icon,
-    Color color,
-  ) {
-    return Card(
-      elevation: 3,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 24, color: color),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
+              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+              child: Icon(icon, size: 28, color: color),
+           ),
+           const SizedBox(width: 16),
+           Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    role,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    count,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    ),
-                  ),
-                ],
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
+                    Text(role, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF757682))),
+                    const SizedBox(height: 4),
+                    Text(count, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: color)),
+                 ],
               ),
-            ),
-          ],
-        ),
+           ),
+        ],
       ),
     );
   }
 
   Widget _buildStatItem(String role, int count, int total, Color color) {
     final percentage = total > 0 ? (count / total * 100) : 0;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(role, style: const TextStyle(fontSize: 14)),
+    return Row(
+       children: [
+          SizedBox(
+             width: 80,
+             child: Text(role, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF001F2A))),
           ),
+          const SizedBox(width: 16),
           Expanded(
-            flex: 3,
-            child: LinearProgressIndicator(
-              value: total > 0 ? count / total : 0,
-              backgroundColor: Colors.grey[200],
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-              minHeight: 8,
-              borderRadius: BorderRadius.circular(4),
-            ),
+             child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                   value: total > 0 ? count / total : 0,
+                   backgroundColor: const Color(0xFFF4FAFF),
+                   valueColor: AlwaysStoppedAnimation<Color>(color),
+                   minHeight: 12,
+                ),
+             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: Text(
-              '${percentage.toStringAsFixed(1)}%',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: color,
-              ),
-              textAlign: TextAlign.right,
-            ),
+          const SizedBox(width: 16),
+          SizedBox(
+             width: 60,
+             child: Text(
+                '${percentage.toStringAsFixed(1)}%',
+                style: TextStyle(fontWeight: FontWeight.w900, color: color),
+                textAlign: TextAlign.right,
+             ),
           ),
-        ],
-      ),
+       ],
     );
   }
 }

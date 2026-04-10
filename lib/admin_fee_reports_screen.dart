@@ -634,37 +634,140 @@ class _AdminFeeReportsScreenState extends State<AdminFeeReportsScreen>
             ),
           ],
         ),
-        trailing: IconButton(
-          icon: Icon(Icons.notifications_active, color: Colors.orange[700]),
-          tooltip: 'Send Reminder',
-          onPressed: () async {
-            try {
-              final msg = await FeeService.sendFeeReminder(
-                schoolCode: widget.schoolCode,
-                dueId: due.id,
-                studentId: due.studentId,
-              );
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(msg),
-                    backgroundColor: msg.contains('Cannot send') || msg.contains('not found') ? Colors.orange : Colors.green,
-                  ),
-                );
-              }
-            } catch (e) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Failed to send reminder. $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            }
-          },
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(Icons.check_circle_outline, color: Colors.green[700]),
+              tooltip: 'Mark Paid (Offline)',
+              onPressed: () => _showManualPaymentDialog(due),
+            ),
+            IconButton(
+              icon: Icon(Icons.notifications_active, color: Colors.orange[700]),
+              tooltip: 'Send Reminder',
+              onPressed: () async {
+                try {
+                  final msg = await FeeService.sendFeeReminder(
+                    schoolCode: widget.schoolCode,
+                    dueId: due.id,
+                    studentId: due.studentId,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(msg),
+                        backgroundColor: msg.contains('Cannot send') || msg.contains('not found') ? Colors.orange : Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to send reminder. $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  void _showManualPaymentDialog(StudentDue due) {
+    String paymentMode = 'Cash';
+    final refController = TextEditingController();
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text('Mark Offline Payment'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Marking ${due.installmentLabel} as paid for ${due.studentName}.'),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: paymentMode,
+                    decoration: InputDecoration(
+                      labelText: 'Payment Mode',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    items: ['Cash', 'Cheque', 'Bank Transfer', 'Other']
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
+                    onChanged: (val) => setState(() => paymentMode = val!),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: refController,
+                    decoration: InputDecoration(
+                      labelText: 'Reference/Receipt No. (Optional)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          setState(() => isSubmitting = true);
+                          try {
+                            await FeeService.markAsPaidManually(
+                              schoolCode: widget.schoolCode,
+                              dueId: due.id,
+                              paymentMode: paymentMode,
+                              referenceNumber: refController.text.trim().isEmpty ? 'N/A' : refController.text.trim(),
+                              adminId: widget.adminId,
+                            );
+                            if (context.mounted) Navigator.pop(context);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Marked as paid!'), backgroundColor: Colors.green),
+                              );
+                            }
+                          } catch (e) {
+                            setState(() => isSubmitting = false);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[700],
+                    foregroundColor: Colors.white,
+                  ),
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)),
+                        )
+                      : const Text('Confirm Payment'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

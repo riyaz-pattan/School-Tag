@@ -1,5 +1,6 @@
 // super_admin_home_screen.dart
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -80,10 +81,17 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
   }
 
   // Cache methods
+  int _getSafeInt(SharedPreferences prefs, String key) {
+    final val = prefs.get(key);
+    if (val is int) return val;
+    if (val is String) return int.tryParse(val) ?? 0;
+    return 0;
+  }
+
   Future<void> _initializeCache() async {
     final prefs = await SharedPreferences.getInstance();
-    _totalSchools = prefs.getInt('super_admin_schools') ?? 0;
-    _activeSchools = prefs.getInt('super_admin_active_schools') ?? 0;
+    _totalSchools = _getSafeInt(prefs, 'super_admin_schools');
+    _activeSchools = _getSafeInt(prefs, 'super_admin_active_schools');
     _superAdminName = prefs.getString('super_admin_name') ?? '';
     final lastFetch = prefs.getString('super_admin_last_fetch');
     if (lastFetch != null) {
@@ -574,65 +582,118 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
     }
   }
 
-  Widget _buildMobileTabletLayout() {
+    Widget _buildMobileTabletLayout() {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_isMobile ? 'Dashboard' : 'Super Admin Dashboard'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.blue[800],
-        elevation: 0,
-        actions: [
-          if (!_isMobile)
-            IconButton(
-              icon: const Icon(Icons.refresh, color: Colors.blue),
-              onPressed: _loadDashboardData,
-              tooltip: 'Refresh',
+      backgroundColor: const Color(0xFFF4FAFF),
+      appBar: _isMobile
+          ? null // Use custom modern header instead of standard Appbar
+          : AppBar(
+              title: const Text('Super Admin Dashboard', style: TextStyle(color: Color(0xFF001F2A), fontWeight: FontWeight.bold)),
+              backgroundColor: const Color(0xFFFFFFFF),
+              elevation: 0,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh, color: Color(0xFF00113A)),
+                  onPressed: _loadDashboardData,
+                  tooltip: 'Refresh',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout, color: Colors.redAccent),
+                  onPressed: _logout,
+                  tooltip: 'Logout',
+                ),
+              ],
             ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.red),
-            onPressed: _logout,
-            tooltip: 'Logout',
+      drawer: _isMobile ? _buildMobileDrawer() : null,
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        color: const Color(0xFF00113A),
+        backgroundColor: Colors.white,
+        child: _getCurrentScreen(),
+      ),
+      bottomNavigationBar: _isMobile ? _buildModernBottomNav() : null,
+    );
+  }
+
+  Widget _buildModernBottomNav() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFFFF),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF001F2A).withOpacity(0.08),
+            blurRadius: 24,
+            offset: const Offset(0, -4),
           ),
         ],
       ),
-      drawer: _isMobile ? _buildMobileDrawer() : null,
-      body: RefreshIndicator(onRefresh: _onRefresh, child: _getCurrentScreen()),
-      bottomNavigationBar: _isMobile
-          ? BottomNavigationBar(
-              currentIndex: _currentIndex,
-              onTap: (index) {
-                setState(() {
-                  _currentIndex = index;
-                });
-              },
-              type: BottomNavigationBarType.fixed,
-              backgroundColor: Colors.white,
-              selectedItemColor: Colors.blue[700],
-              unselectedItemColor: Colors.grey[600],
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.dashboard),
-                  label: 'Dashboard',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.info),
-                  label: 'System Info',
-                ),
-              ],
-            )
-          : null,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildBottomNavItem(Icons.dashboard_rounded, 'Dashboard', 0),
+              _buildBottomNavItem(Icons.school_rounded, 'Schools', 1),
+              _buildBottomNavItem(Icons.info_outline_rounded, 'System Info', 2),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavItem(IconData icon, String label, int index) {
+    final isSelected = _currentIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _currentIndex = index;
+        });
+      },
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFE6F6FF) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? const Color(0xFF00113A) : const Color(0xFF757682),
+              size: 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF00113A) : const Color(0xFF757682),
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildMobileDrawer() {
     return Drawer(
+      backgroundColor: const Color(0xFFF4FAFF),
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.blue[800]!, Colors.blue[600]!],
+                colors: [Color(0xFF00113A), Color(0xFF399E9D)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
             child: Column(
@@ -643,85 +704,70 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                   _superAdminName,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 20,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                Text('Super Admin', style: TextStyle(color: Colors.blue[100])),
+                const SizedBox(height: 4),
+                const Text('Super Admin', style: TextStyle(color: Color(0xFFB3C5FF))),
               ],
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.dashboard, color: Colors.blue),
-            title: const Text('Dashboard'),
-            onTap: () {
-              setState(() => _currentIndex = 0);
-              Navigator.pop(context);
-            },
+          _buildDrawerItem(Icons.dashboard_rounded, 'Dashboard', () {
+            setState(() => _currentIndex = 0);
+            Navigator.pop(context);
+          }, isSelected: _currentIndex == 0),
+          _buildDrawerItem(Icons.school_rounded, 'School Management', () {
+            Navigator.pop(context);
+            _navigateToSchoolManagement();
+          }),
+          _buildDrawerItem(Icons.info_outline_rounded, 'System Info', () {
+            setState(() => _currentIndex = 2);
+            Navigator.pop(context);
+          }, isSelected: _currentIndex == 2),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Divider(color: Color(0xFFC5C6D2)),
           ),
-          ListTile(
-            leading: const Icon(Icons.school, color: Colors.orange),
-            title: const Text('School Management'),
-            onTap: () {
-              Navigator.pop(context);
-              _navigateToSchoolManagement();
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.info, color: Colors.green),
-            title: const Text('System Info'),
-            onTap: () {
-              setState(() => _currentIndex = 1);
-              Navigator.pop(context);
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.person_add, color: Colors.teal),
-            title: const Text('Add Users'),
-            onTap: _navigateToAddUsers,
-          ),
-          ListTile(
-            leading: const Icon(Icons.people, color: Colors.purple),
-            title: const Text('Manage Users'),
-            onTap: _navigateToUserManagement,
-          ),
-          // NEW: Users Count in drawer
-          ListTile(
-            leading: const Icon(Icons.analytics, color: Colors.indigo),
-            title: const Text('Users Count'),
-            onTap: _navigateToUsersCount,
-          ),
-          ListTile(
-            leading: const Icon(
-              Icons.event_available,
-              color: Colors.deepOrange,
-            ),
-            title: const Text('Demo Bookings'),
-            onTap: _navigateToDemoBookings,
-          ),
-          ListTile(
-            leading: const Icon(Icons.lock, color: Colors.grey),
-            title: const Text('Change Password'),
-            onTap: _showChangePasswordDialog,
-          ),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Logout'),
-            onTap: _logout,
-          ),
+          _buildDrawerItem(Icons.person_add_rounded, 'Add Users', _navigateToAddUsers),
+          _buildDrawerItem(Icons.people_alt_rounded, 'Manage Users', _navigateToUserManagement),
+          _buildDrawerItem(Icons.analytics_rounded, 'Users Count', _navigateToUsersCount),
+          _buildDrawerItem(Icons.event_available_rounded, 'Demo Bookings', _navigateToDemoBookings),
+          _buildDrawerItem(Icons.lock_reset_rounded, 'Change Password', _showChangePasswordDialog),
+          _buildDrawerItem(Icons.logout_rounded, 'Logout', _logout, isDestructive: true),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap, {bool isSelected = false, bool isDestructive = false}) {
+    final color = isDestructive ? Colors.redAccent : (isSelected ? const Color(0xFF00113A) : const Color(0xFF001F2A));
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFFE6F6FF) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: color),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: color,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+        onTap: onTap,
       ),
     );
   }
 
   Widget _buildDesktopLayout() {
     return Scaffold(
+      backgroundColor: const Color(0xFFF4FAFF),
       body: Row(
         children: [
-          // Sidebar
           _buildDesktopSidebar(),
-          // Main Content
           Expanded(
             child: Column(
               children: [
@@ -729,6 +775,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: _onRefresh,
+                    color: const Color(0xFF00113A),
                     child: _getCurrentScreen(),
                   ),
                 ),
@@ -742,99 +789,119 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
 
   Widget _buildDesktopSidebar() {
     return Container(
-      width: 260,
-      color: Colors.white,
+      width: 280,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFFFF),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF001F2A).withOpacity(0.04),
+            blurRadius: 24,
+            offset: const Offset(4, 0),
+          ),
+        ],
+      ),
       child: SafeArea(
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(24),
               child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundColor: Colors.blue[100],
-                    child: Text(
-                      _superAdminName.isNotEmpty
-                          ? _superAdminName[0].toUpperCase()
-                          : 'S',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Color.fromARGB(255, 22, 105, 200),
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF00113A), Color(0xFF399E9D)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00113A).withOpacity(0.2),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        _superAdminName.isNotEmpty ? _superAdminName[0].toUpperCase() : 'S',
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   Text(
                     _superAdminName,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Color.fromARGB(255, 21, 100, 191),
+                      fontSize: 18,
+                      color: Color(0xFF001F2A),
                     ),
                     textAlign: TextAlign.center,
                   ),
+                  const SizedBox(height: 4),
                   const Text(
                     'Super Administrator',
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                    style: TextStyle(color: Color(0xFF757682), fontSize: 13),
                     textAlign: TextAlign.center,
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 8),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: Divider(color: Color(0xFFE6F6FF)),
+            ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
                 children: [
-                  _buildSidebarItem(Icons.dashboard, 'Dashboard', 0),
-                  _buildSidebarItem(Icons.school, 'School Management', 1),
-                  _buildSidebarItem(Icons.info, 'System Information', 2),
-                  const SizedBox(height: 16),
-                  _buildSidebarActionItem(
-                    Icons.person_add,
-                    'Add Users',
-                    _navigateToAddUsers,
+                  _buildSidebarItem(Icons.dashboard_rounded, 'Dashboard', 0),
+                  _buildSidebarItem(Icons.school_rounded, 'School Management', 1),
+                  _buildSidebarItem(Icons.info_outline_rounded, 'System Info', 2),
+                  const SizedBox(height: 24),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 12, bottom: 8),
+                    child: Text(
+                      'QUICK ACTIONS',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                        color: Color(0xFF757682),
+                      ),
+                    ),
                   ),
-                  _buildSidebarActionItem(
-                    Icons.people,
-                    'Manage Users',
-                    _navigateToUserManagement,
-                  ),
-                  // NEW: Users Count in sidebar
-                  _buildSidebarActionItem(
-                    Icons.analytics,
-                    'Users Count',
-                    _navigateToUsersCount,
-                  ),
-                  _buildSidebarActionItem(
-                    Icons.event_available,
-                    'Demo Bookings',
-                    _navigateToDemoBookings,
-                  ),
-                  _buildSidebarActionItem(
-                    Icons.lock,
-                    'Change Password',
-                    _showChangePasswordDialog,
-                  ),
+                  _buildSidebarActionItem(Icons.person_add_rounded, 'Add Users', _navigateToAddUsers),
+                  _buildSidebarActionItem(Icons.people_alt_rounded, 'Manage Users', _navigateToUserManagement),
+                  _buildSidebarActionItem(Icons.analytics_rounded, 'Users Count', _navigateToUsersCount),
+                  _buildSidebarActionItem(Icons.event_available_rounded, 'Demo Bookings', _navigateToDemoBookings),
+                  _buildSidebarActionItem(Icons.lock_reset_rounded, 'Change Password', _showChangePasswordDialog),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              child: OutlinedButton.icon(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: TextButton.icon(
                 onPressed: _logout,
-                icon: const Icon(Icons.logout, color: Colors.red),
+                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
                 label: const Text(
                   'Logout',
-                  style: TextStyle(color: Colors.red),
+                  style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
                 ),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: Colors.red.withOpacity(0.5)),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
+                  backgroundColor: Colors.red[50], // Subtle red background
                 ),
               ),
             ),
@@ -846,45 +913,67 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
 
   Widget _buildSidebarItem(IconData icon, String title, int index) {
     final isSelected = _currentIndex == index;
-    return ListTile(
-      leading: Icon(icon, color: isSelected ? Colors.blue[700] : Colors.grey),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: isSelected ? Colors.blue[700] : Colors.grey[700],
-          fontWeight: isSelected ? FontWeight.bold : null,
-        ),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFF00113A) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
       ),
-      selected: false,
-      onTap: () => setState(() => _currentIndex = index),
+      child: ListTile(
+        leading: Icon(icon, color: isSelected ? Colors.white : const Color(0xFF757682)),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isSelected ? Colors.white : const Color(0xFF001F2A),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+        selected: isSelected,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        onTap: () {
+          if (index == 1) {
+             _navigateToSchoolManagement();
+          } else {
+             setState(() => _currentIndex = index);
+          }
+        },
+      ),
     );
   }
 
-  Widget _buildSidebarActionItem(
-    IconData icon,
-    String title,
-    VoidCallback onTap,
-  ) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.grey),
-      title: Text(
-        title,
-        style: const TextStyle(color: Color.fromARGB(255, 96, 96, 96)),
+  Widget _buildSidebarActionItem(IconData icon, String title, VoidCallback onTap) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      child: ListTile(
+        leading: Icon(icon, color: const Color(0xFF757682)),
+        title: Text(
+          title,
+          style: const TextStyle(
+            color: Color(0xFF444650),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        hoverColor: const Color(0xFFE6F6FF),
+        onTap: onTap,
       ),
-      onTap: onTap,
     );
   }
 
   Widget _buildDesktopTopBar() {
     return Container(
-      height: 70,
+      height: 72,
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      color: Colors.white,
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFFFFF),
+        border: Border(bottom: BorderSide(color: Color(0xFFE6F6FF), width: 1)),
+      ),
       child: Row(
         children: [
           if (_currentIndex != 0)
             IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.blue),
+              icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF00113A)),
               onPressed: () {
                 setState(() {
                   _currentIndex = 0;
@@ -898,14 +987,14 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color.fromARGB(255, 21, 103, 195),
+              color: Color(0xFF00113A),
             ),
           ),
           const Spacer(),
           _buildSearchBar(),
           const SizedBox(width: 16),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.blue),
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF00113A)),
             onPressed: _loadDashboardData,
             tooltip: 'Refresh Data',
           ),
@@ -916,18 +1005,21 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
 
   Widget _buildSearchBar() {
     return Container(
-      width: _isDesktop ? 300 : 200,
+      width: _isDesktop ? 320 : 220,
+      height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.grey[200],
-        borderRadius: BorderRadius.circular(30),
+        color: const Color(0xFFF4FAFF),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE6F6FF)),
       ),
       child: TextField(
-        decoration: InputDecoration(
+        decoration: const InputDecoration(
           hintText: 'Search...',
-          hintStyle: TextStyle(color: Colors.grey[600]),
-          border: InputBorder.none,
-          prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+          hintStyle: TextStyle(color: Color(0xFF757682)),
+          border:InputBorder.none,
+          prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF757682)),
+          contentPadding: EdgeInsets.symmetric(vertical: 12),
         ),
         onChanged: (value) {
           // Optional: integrate search later
@@ -966,156 +1058,198 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
     return FadeTransition(
       opacity: _fadeInAnimation,
       child: Container(
-        color: const Color(0xFFF7F9FC),
-        child: RefreshIndicator(
-          onRefresh: _onRefresh,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              if (!_isMobile) SliverToBoxAdapter(child: _buildWelcomeBanner()),
-              if (_isMobile) _buildModernHeader(),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: _isDesktop ? 32 : 16,
-                    vertical: 24,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (!_isMobile) _buildUserInfoCard(),
-                      if (_isMobile) const SizedBox(height: 16),
-                      _buildStatisticsRow(),
-                      const SizedBox(height: 32),
-                      _buildModernWorkspaceSection(),
-                      const SizedBox(height: 60),
-                    ],
-                  ),
+        color: const Color(0xFFF4FAFF),
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            if (_isMobile) _buildModernMobileHeader(),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: _isDesktop ? 40 : 20,
+                  vertical: _isDesktop ? 32 : 24,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!_isMobile) _buildDesktopWelcomeBanner(),
+                    const SizedBox(height: 32),
+                    _buildStatisticsRow(),
+                    const SizedBox(height: 48),
+                    _buildModernWorkspaceSection(),
+                    const SizedBox(height: 80),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildModernHeader() {
+  Widget _buildModernMobileHeader() {
     return SliverToBoxAdapter(
       child: Container(
-        padding: const EdgeInsets.only(
-          top: 60,
-          left: 24,
-          right: 24,
-          bottom: 32,
-        ),
+        padding: const EdgeInsets.fromLTRB(20, 60, 20, 32),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.indigo[800]!, Colors.deepPurple[500]!],
+          gradient: const LinearGradient(
+            colors: [Color(0xFF00113A), Color(0xFF399E9D)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: const BorderRadius.only(
-            bottomLeft: Radius.circular(32),
-            bottomRight: Radius.circular(32),
-          ),
+          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
           boxShadow: [
             BoxShadow(
-              color: Colors.indigo.withOpacity(0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
+              color: const Color(0xFF00113A).withOpacity(0.15),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
             ),
           ],
         ),
-        child: SafeArea(
-          bottom: false,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Welcome, $_superAdminName 👋',
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: -0.5,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.3),
-                        ),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.admin_panel_settings,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                          SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              'Super Administrator',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Stack(
-                alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.5),
-                        width: 2,
-                      ),
+                  Text(
+                    '${_getGreeting()},',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withOpacity(0.8),
                     ),
                   ),
-                  CircleAvatar(
-                    radius: 26,
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    child: const Icon(
-                      Icons.shield,
-                      size: 30,
+                  const SizedBox(height: 4),
+                  Text(
+                    _superAdminName,
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
                       color: Colors.white,
+                      letterSpacing: -0.5,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 16),
+                        SizedBox(width: 8),
+                        Text(
+                          'Executive Console',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+            GestureDetector(
+              onTap: () => Scaffold.of(context).openDrawer(),
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.2),
+                  border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
+                ),
+                child: const Icon(Icons.menu_rounded, color: Colors.white, size: 28),
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopWelcomeBanner() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF00113A), Color(0xFF399E9D)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00113A).withOpacity(0.15),
+            blurRadius: 32,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${_getGreeting()}, $_superAdminName',
+                  style: const TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Command center for institutional legacy and management.',
+                  style: TextStyle(fontSize: 16, color: Color(0xFFE6F6FF)),
+                ),
+                if (_lastDataFetchTime != null) ...[
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.update_rounded, size: 16, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Synced: ${_formatDateTime(_lastDataFetchTime!)}',
+                          style: const TextStyle(fontSize: 13, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Icon(
+            Icons.account_balance_rounded,
+            size: 120,
+            color: Colors.white.withOpacity(0.15),
+          ),
+        ],
       ),
     );
   }
@@ -1127,29 +1261,32 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
         const Text(
           'Overview',
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 20,
             fontWeight: FontWeight.w800,
+            color: Color(0xFF001F2A),
             letterSpacing: -0.5,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         Row(
           children: [
             Expanded(
-              child: _buildStatCard(
+              child: _buildPremiumStatCard(
                 'Total Schools',
                 _totalSchools.toString(),
-                Icons.account_balance,
-                Colors.indigo,
+                Icons.account_balance_rounded,
+                const Color(0xFF00113A),
+                const Color(0xFFE6F6FF),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 16),
             Expanded(
-              child: _buildStatCard(
+              child: _buildPremiumStatCard(
                 'Active Schools',
                 _activeSchools.toString(),
-                Icons.check_circle_outline,
-                Colors.green,
+                Icons.verified_rounded,
+                const Color(0xFF006D36),
+                const Color(0xFFE8F8EE),
               ),
             ),
           ],
@@ -1158,52 +1295,53 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
     );
   }
 
-  Widget _buildStatCard(
+  Widget _buildPremiumStatCard(
     String title,
     String value,
     IconData icon,
-    MaterialColor color,
+    Color primaryColor,
+    Color surfaceColor,
   ) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFFFFFFF),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
+            color: const Color(0xFF001F2A).withOpacity(0.06),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           ),
         ],
-        border: Border.all(color: Colors.grey[100]!),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              shape: BoxShape.circle,
+              color: surfaceColor,
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(icon, color: color[700], size: 24),
+            child: Icon(icon, color: primaryColor, size: 28),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 24,
+            style: TextStyle(
+              fontSize: 36,
               fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
+              color: primaryColor,
+              letterSpacing: -1,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             title,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey[600],
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF757682),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1216,389 +1354,67 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Super Admin Workspace',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
-              ),
-            ),
-            Icon(Icons.more_horiz, color: Colors.grey[400]),
-          ],
+        const Text(
+          'Executive Toolkit',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF001F2A),
+            letterSpacing: -0.5,
+          ),
         ),
         const SizedBox(height: 20),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(32),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 24,
-                offset: const Offset(0, 12),
-              ),
-            ],
-            border: Border.all(color: Colors.grey[100]!),
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              int crossAxisCount = _isMobile ? 3 : 6;
-              if (constraints.maxWidth < 340) {
-                crossAxisCount = 3;
-              }
-              return GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: crossAxisCount,
-                mainAxisSpacing: 32,
-                crossAxisSpacing: 16,
-                childAspectRatio: constraints.maxWidth < 340 ? 0.7 : 0.8,
-                children: [
-                  _buildFlatAppIcon(
-                    'Schools',
-                    Icons.account_balance,
-                    Colors.indigo,
-                    _navigateToSchoolManagement,
-                  ),
-                  _buildFlatAppIcon(
-                    'Users Count',
-                    Icons.people_alt,
-                    Colors.teal,
-                    _navigateToUsersCount,
-                  ),
-                  _buildFlatAppIcon(
-                    'System',
-                    Icons.analytics,
-                    Colors.purple,
-                    _showSystemOverview,
-                  ),
-                  _buildFlatAppIcon(
-                    'Add Users',
-                    Icons.person_add,
-                    Colors.orange,
-                    _navigateToAddUsers,
-                  ),
-                  _buildFlatAppIcon(
-                    'Manage Users',
-                    Icons.people,
-                    Colors.green,
-                    _navigateToUserManagement,
-                  ),
-                  _buildFlatAppIcon(
-                    'Demo Bookings',
-                    Icons.event_available,
-                    Colors.deepOrange,
-                    _navigateToDemoBookings,
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFlatAppIcon(
-    String label,
-    IconData icon,
-    MaterialColor colorSwatch,
-    VoidCallback onTap,
-  ) {
-    Color primaryColor = colorSwatch[600] ?? colorSwatch;
-
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            Container(
-              height: 64,
-              width: 64,
-              decoration: BoxDecoration(
-                color: colorSwatch[50] ?? primaryColor.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Center(child: Icon(icon, color: primaryColor, size: 30)),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Colors.grey[800],
-                letterSpacing: -0.2,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWelcomeBanner() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.indigo[800]!, Colors.indigo[400]!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.indigo.withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Welcome back, $_superAdminName!',
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Manage the entire system efficiently',
-                  style: TextStyle(fontSize: 16, color: Colors.white70),
-                ),
-                if (_lastDataFetchTime != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withOpacity(0.4)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.update, size: 14, color: Colors.white),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Last updated: ${_formatDateTime(_lastDataFetchTime!)}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Icon(
-            Icons.admin_panel_settings,
-            size: 80,
-            color: Colors.white.withOpacity(0.2),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUserInfoCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: Colors.indigo[50],
-                  child: Icon(
-                    Icons.shield,
-                    size: 28,
-                    color: Colors.indigo[700],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _superAdminName,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.indigo[800],
-                        ),
-                      ),
-                      const Text(
-                        'Full System Access',
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Divider(height: 24),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 130,
-                    child: Text(
-                      'Role:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ),
-                  Text('Super Administrator', style: TextStyle(fontSize: 16)),
-                ],
-              ),
-            ),
-            if (_lastDataFetchTime != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange.withOpacity(0.2)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.update, size: 16, color: Colors.orange[800]),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Last updated: ${_formatDateTime(_lastDataFetchTime!)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.orange[800],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  // REMOVED: _buildStatsSection() method entirely
-
-  Widget _buildActionsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Quick Actions',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Color.fromARGB(255, 94, 94, 94),
-          ),
-        ),
-        const SizedBox(height: 16),
         GridView(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: _getActionGridCrossAxisCount(),
+            crossAxisCount: _isMobile ? 2 : (_isTablet ? 3 : 4),
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: _getActionGridChildAspectRatio(),
+            childAspectRatio: _isMobile ? 1.0 : 1.2,
           ),
           children: [
-            // NEW: System Overview action card
-            _buildAnimatedActionCard(
-              'System Overview',
-              'View system statistics',
-              Icons.analytics,
-              Colors.purple,
-              _showSystemOverview,
+            _buildActionCard(
+               'School Management',
+               'Manage institutional data',
+               Icons.domain_add_rounded,
+               const Color(0xFF00113A),
+               _navigateToSchoolManagement,
             ),
-            _buildAnimatedActionCard(
-              'Users Count',
-              'View user counts by school',
-              Icons.people_alt,
-              Colors.indigo,
-              _navigateToUsersCount,
+            _buildActionCard(
+               'User Analytics',
+               'View demographic counts',
+               Icons.analytics_rounded,
+               const Color(0xFF006D36),
+               _navigateToUsersCount,
             ),
-            _buildAnimatedActionCard(
-              'Manage Schools',
-              'View and edit schools',
-              Icons.list_alt,
-              Colors.green,
-              _navigateToSchoolManagement,
+            _buildActionCard(
+               'Add Users',
+               'Provision new accounts',
+               Icons.person_add_rounded,
+               const Color(0xFF399E9D),
+               _navigateToAddUsers,
             ),
-            _buildAnimatedActionCard(
-              'Add Users',
-              'Add single or bulk users',
-              Icons.person_add,
-              Colors.orange,
-              _navigateToAddUsers,
+            _buildActionCard(
+               'Manage Users',
+               'Access control & roles',
+               Icons.manage_accounts_rounded,
+               const Color(0xFF607D8B),
+               _navigateToUserManagement,
             ),
-            _buildAnimatedActionCard(
-              'Manage Users',
-              'View and manage all users',
-              Icons.people,
-              Colors.teal,
-              _navigateToUserManagement,
+            _buildActionCard(
+               'Demo Bookings',
+               'Review scheduled demos',
+               Icons.event_available_rounded,
+               const Color(0xFF2A4386),
+               _navigateToDemoBookings,
             ),
-            _buildAnimatedActionCard(
-              'Change Password',
-              'Update security',
-              Icons.lock,
-              Colors.red,
-              _showChangePasswordDialog,
+            _buildActionCard(
+               'System Overview',
+               'Check platform health',
+               Icons.medical_information_rounded,
+               const Color(0xFF50C878),
+               _showSystemOverview,
             ),
           ],
         ),
@@ -1606,109 +1422,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
     );
   }
 
-  // NEW: Show System Overview Dialog
-  void _showSystemOverview() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.analytics, color: Colors.purple),
-            SizedBox(width: 8),
-            Text('System Overview'),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildSystemOverviewCard(
-                'Total Schools',
-                _totalSchools.toString(),
-                Icons.school,
-                Colors.green,
-              ),
-              const SizedBox(height: 12),
-              _buildSystemOverviewCard(
-                'Active Schools',
-                _activeSchools.toString(),
-                Icons.check_circle,
-                Colors.blue,
-              ),
-              const SizedBox(height: 12),
-              _buildSystemOverviewCard(
-                'Last Updated',
-                _lastDataFetchTime != null
-                    ? _formatDateTime(_lastDataFetchTime!)
-                    : 'Never',
-                Icons.update,
-                Colors.orange,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSystemOverviewCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 24, color: color),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnimatedActionCard(
+  Widget _buildActionCard(
     String title,
     String subtitle,
     IconData icon,
@@ -1720,55 +1434,53 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: const Color(0xFFFFFFFF),
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(0.12),
-                blurRadius: 15,
+                color: const Color(0xFF001F2A).withOpacity(0.04),
+                blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
             ],
-            border: Border.all(color: color.withOpacity(0.05)),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            padding: const EdgeInsets.all(20),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.1),
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Icon(icon, size: 28, color: color),
+                  child: Icon(icon, color: color, size: 28),
                 ),
-                const SizedBox(height: 12),
-                Flexible(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF001F2A),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Flexible(
-                  child: Text(
-                    subtitle,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF757682)),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1785,8 +1497,8 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
   Widget _buildSystemInfo() {
     return SingleChildScrollView(
       padding: EdgeInsets.symmetric(
-        horizontal: _isDesktop ? 32 : 16,
-        vertical: _isDesktop ? 24 : 16,
+        horizontal: _isDesktop ? 40 : 20,
+        vertical: _isDesktop ? 32 : 24,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1794,31 +1506,44 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
           const Text(
             'System Information',
             style: TextStyle(
-              fontSize: 22,
+              fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Color.fromARGB(255, 22, 102, 195),
+              color: Color(0xFF00113A),
+              letterSpacing: -0.5,
             ),
           ),
-          const SizedBox(height: 16),
-          Card(
-            color: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+          const SizedBox(height: 24),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFFFF),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF001F2A).withOpacity(0.05),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
             ),
             child: Padding(
-              padding: EdgeInsets.all(_isDesktop ? 24 : 16),
+              padding: EdgeInsets.all(_isDesktop ? 32 : 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildInfoRow('Super Admin Name', _superAdminName),
-                  _buildInfoRow('User ID', widget.userId),
-                  _buildInfoRow('Role', 'Super Administrator'),
-                  _buildInfoRow('Total Schools', _totalSchools.toString()),
-                  _buildInfoRow('Active Schools', _activeSchools.toString()),
+                  _buildPremiumInfoRow('Platform Name', 'Executive Scholar'),
+                  _buildPremiumInfoRow('Super Admin Name', _superAdminName),
+                  _buildPremiumInfoRow('User ID', widget.userId),
+                  _buildPremiumInfoRow('Access Level', 'Executive / Super Administrator'),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Divider(color: Color(0xFFE6F6FF)),
+                  ),
+                  _buildPremiumInfoRow('Total Enrolled Schools', _totalSchools.toString()),
+                  _buildPremiumInfoRow('Active Schools', _activeSchools.toString()),
                   if (_lastDataFetchTime != null) ...[
-                    const SizedBox(height: 16),
-                    _buildInfoRow(
-                      'Data Last Updated',
+                    const SizedBox(height: 8),
+                    _buildPremiumInfoRow(
+                      'Data Last Synced',
                       _formatDateTime(_lastDataFetchTime!),
                     ),
                   ],
@@ -1831,26 +1556,158 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
+  Widget _buildPremiumInfoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: _isDesktop ? 150 : 120,
+            width: _isDesktop ? 200 : 140,
             child: Text(
-              '$label:',
+              label,
               style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.grey,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF757682),
+                fontSize: 14,
               ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(color: Color.fromARGB(255, 73, 73, 73)),
+              style: const TextStyle(
+                color: Color(0xFF001F2A),
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    if (hour < 21) return 'Good evening';
+    return 'Good night';
+  }
+
+
+  void _showSystemOverview() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: 400,
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFFFF),
+            borderRadius: BorderRadius.circular(32),
+            boxShadow: [
+               BoxShadow(
+                 color: const Color(0xFF001F2A).withOpacity(0.1),
+                 blurRadius: 32,
+                 offset: const Offset(0, 16),
+               ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6F6FF),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.analytics_rounded, color: Color(0xFF00113A), size: 32),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                 'System Overview',
+                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF001F2A)),
+              ),
+              const SizedBox(height: 32),
+              _buildSystemOverviewCard(
+                'Total Network Schools',
+                _totalSchools.toString(),
+                Icons.account_balance_rounded,
+                const Color(0xFF00113A),
+              ),
+              const SizedBox(height: 16),
+              _buildSystemOverviewCard(
+                'Active Deployments',
+                _activeSchools.toString(),
+                Icons.check_circle_rounded,
+                const Color(0xFF006D36),
+              ),
+              const SizedBox(height: 16),
+              _buildSystemOverviewCard(
+                'Last Data Sync',
+                _lastDataFetchTime != null ? _formatDateTime(_lastDataFetchTime!) : 'Never',
+                Icons.sync_rounded,
+                const Color(0xFF399E9D),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                   onPressed: () => Navigator.pop(context),
+                   style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF4FAFF),
+                      foregroundColor: const Color(0xFF00113A),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                   ),
+                   child: const Text('Close Overview', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSystemOverviewCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4FAFF),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 24, color: color),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF757682), fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF001F2A)),
+                ),
+              ],
             ),
           ),
         ],
@@ -2575,135 +2432,179 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF4FAFF),
       appBar: AppBar(
-        title: const Text('School Management'),
-        backgroundColor: Colors.blue[700],
+        title: const Text('School Deployments', style: TextStyle(color: Color(0xFF001F2A), fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFFFFFFFF),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF00113A)),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24),
         child: SingleChildScrollView(
           controller: _scrollController,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Add School Form Card
-              Card(
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFFFF),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                     BoxShadow(
+                       color: const Color(0xFF001F2A).withOpacity(0.04),
+                       blurRadius: 24,
+                       offset: const Offset(0, 8),
+                     ),
+                  ],
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(24.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Add New School',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE6F6FF),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.add_business_rounded, color: Color(0xFF00113A)),
+                          ),
+                          const SizedBox(width: 16),
+                          const Text(
+                            'Provision New School',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF001F2A),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
+                      TextField(
+                        controller: _schoolNameController,
+                        decoration: InputDecoration(
+                          labelText: 'Official School Name',
+                          labelStyle: const TextStyle(color: Color(0xFF757682)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                          filled: true,
+                          fillColor: const Color(0xFFF4FAFF),
+                          prefixIcon: const Icon(Icons.school_rounded, color: Color(0xFF757682)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                         ),
                       ),
                       const SizedBox(height: 16),
-
-                      // School Name Field
-                      TextField(
-                        controller: _schoolNameController,
-                        decoration: const InputDecoration(
-                          labelText: 'School Name',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 16,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // School Code Field
                       TextField(
                         controller: _schoolCodeController,
-                        decoration: const InputDecoration(
-                          labelText: 'School Code (6 digits)',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 16,
-                          ),
+                        decoration: InputDecoration(
+                          labelText: 'Unique 6-Digit Code',
+                          labelStyle: const TextStyle(color: Color(0xFF757682)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                          filled: true,
+                          fillColor: const Color(0xFFF4FAFF),
+                          prefixIcon: const Icon(Icons.pin_rounded, color: Color(0xFF757682)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                           counterText: "",
                         ),
                         keyboardType: TextInputType.number,
                         maxLength: 6,
                       ),
-                      const SizedBox(height: 12),
-
-                      // School Address Field
+                      const SizedBox(height: 16),
                       TextField(
                         controller: _schoolAddressController,
-                        decoration: const InputDecoration(
-                          labelText: 'School Address (Optional)',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 16,
+                        decoration: InputDecoration(
+                          labelText: 'Campus Address (Optional)',
+                          labelStyle: const TextStyle(color: Color(0xFF757682)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                          filled: true,
+                          fillColor: const Color(0xFFF4FAFF),
+                          prefixIcon: const Padding(
+                            padding: EdgeInsets.only(bottom: 24),
+                            child: Icon(Icons.location_on_rounded, color: Color(0xFF757682)),
                           ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                         ),
                         maxLines: 2,
                       ),
-                      const SizedBox(height: 16),
-
-                      // School Photo Section
+                      const SizedBox(height: 24),
                       const Text(
-                        'School Photo (Optional)',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        'Campus Identity',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF001F2A)),
                       ),
-                      const SizedBox(height: 8),
-
-                      // Image Preview
+                      const SizedBox(height: 12),
                       if (_selectedImageBytes != null) ...[
                         Container(
-                          width: 100,
-                          height: 100,
+                          width: double.infinity,
+                          height: 140,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(16),
                             image: DecorationImage(
                               image: MemoryImage(_selectedImageBytes!),
                               fit: BoxFit.cover,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 16),
                       ],
-
-                      // Select Photo Button
                       SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton.icon(
+                        height: 48,
+                        child: OutlinedButton.icon(
                           onPressed: () => _pickImage(false),
-                          icon: const Icon(Icons.photo_library),
-                          label: const Text('Select School Photo (Max 1MB)'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          icon: const Icon(Icons.add_photo_alternate_rounded),
+                          label: const Text('Upload Photo (Max 1MB)', style: TextStyle(fontWeight: FontWeight.bold)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF00113A),
+                            side: const BorderSide(color: Color(0xFF00113A), width: 1.5),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-
-                      // Add School Button
+                      const SizedBox(height: 32),
                       SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _isUploading ? null : _addSchool,
-                          icon: _isUploading
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.add),
-                          label: Text(
-                            _isUploading ? 'Uploading...' : 'Add School',
+                        height: 56,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF00113A), Color(0xFF399E9D)],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                               BoxShadow(
+                                 color: const Color(0xFF00113A).withOpacity(0.2),
+                                 blurRadius: 12,
+                                 offset: const Offset(0, 4),
+                               ),
+                            ],
                           ),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: ElevatedButton(
+                            onPressed: _isUploading ? null : _addSchool,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                            child: _isUploading
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                                  )
+                                : const Row(
+                                   mainAxisAlignment: MainAxisAlignment.center,
+                                   children: [
+                                      Icon(Icons.add_box_rounded, color: Colors.white),
+                                      SizedBox(width: 8),
+                                      Text('Provision System Code', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                                   ]
+                                ),
                           ),
                         ),
                       ),
@@ -2712,63 +2613,53 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                 ),
               ),
 
-              const SizedBox(height: 20),
-
-              // School List Section
-              const Text(
-                'School List',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              const SizedBox(height: 40),
+              Row(
+                children: [
+                  const Text(
+                    'Active Deployments',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF001F2A)),
+                  ),
+                  const Spacer(),
+                  Container(
+                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                     decoration: BoxDecoration(color: const Color(0xFFE6F6FF), borderRadius: BorderRadius.circular(12)),
+                     child: const Text('Live', style: TextStyle(color: Color(0xFF00113A), fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
-              // School List - Now scrollable as part of the main scroll view
               StreamBuilder(
-                stream: FirebaseFirestore.instance
-                    .collection('schools')
-                    .snapshots(),
+                stream: FirebaseFirestore.instance.collection('schools').snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(20.0),
-                        child: CircularProgressIndicator(),
-                      ),
-                    );
+                    return const Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator(color: Color(0xFF00113A))));
                   }
-
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(40),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey[300]!),
+                        color: const Color(0xFFFFFFFF),
+                        borderRadius: BorderRadius.circular(24),
                       ),
                       child: const Center(
-                        child: Text(
-                          'No schools found',
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
+                        child: Column(
+                           children: [
+                              Icon(Icons.domain_disabled_rounded, size: 48, color: Color(0xFFC5C6D2)),
+                              SizedBox(height: 16),
+                              Text('No deployments found', style: TextStyle(fontSize: 16, color: Color(0xFF757682), fontWeight: FontWeight.bold)),
+                           ],
+                        )
                       ),
                     );
                   }
-
                   final schools = snapshot.data!.docs;
                   return Column(
-                    children: schools
-                        .map((school) => _buildSchoolCard(school))
-                        .toList(),
+                    children: schools.map((school) => _buildSchoolCard(school)).toList(),
                   );
                 },
               ),
-
-              // Error Message (only show error messages in the UI if they exist, success messages are now snackbars)
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 16),
-                _buildMessageSection(),
-              ],
-              const SizedBox(
-                height: 20,
-              ), // Extra padding at bottom for better scrolling
             ],
           ),
         ),

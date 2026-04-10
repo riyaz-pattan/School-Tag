@@ -11,6 +11,7 @@ environment:
 
 dependencies:
   animated_text_kit: ^4.3.0
+  cached_network_image: ^3.4.1
   cloud_firestore: ^6.0.2
   cloud_functions: ^6.0.3
   collection: ^1.19.1

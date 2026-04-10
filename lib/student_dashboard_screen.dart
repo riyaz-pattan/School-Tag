@@ -1,5 +1,6 @@
 // student_dashboard_screen.dart
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,6 +19,7 @@ import 'student_performance_screen.dart';
 import 'ai_chat_screen.dart';
 import 'widgets/dashboard_skeleton.dart';
 import 'student_fee_screen.dart';
+import 'student_apply_leave_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   final String userId;
@@ -969,6 +971,22 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
+  void _navigateToApplyLeave() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StudentApplyLeaveScreen(
+          userId: widget.userId,
+          schoolCode: widget.schoolCode,
+          schoolName: widget.schoolName,
+          studentName: _studentName,
+          classId: _studentClassId,
+          section: _studentSection,
+        ),
+      ),
+    );
+  }
+
   void _navigateToExamSchedules() {
     Navigator.push(
       context,
@@ -1270,6 +1288,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             onTap: _navigateToAttendance,
           ),
           ListTile(
+            leading: const Icon(Icons.event_busy, color: Colors.deepOrange),
+            title: const Text('Apply Leave'),
+            onTap: _navigateToApplyLeave,
+          ),
+          ListTile(
             leading: const Icon(Icons.event_note, color: Colors.pink),
             title: const Text('Exam Schedules'),
             onTap: _navigateToExamSchedules,
@@ -1369,6 +1392,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     Icons.check_circle,
                     'Attendance',
                     _navigateToAttendance,
+                  ),
+                  _buildSidebarActionItem(
+                    Icons.event_busy,
+                    'Apply Leave',
+                    _navigateToApplyLeave,
                   ),
                   _buildSidebarActionItem(
                     Icons.event_note,
@@ -1529,7 +1557,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                   if (!_isMobile) _buildStudentInfoCard(),
+                    if (!_isMobile) _buildStudentInfoCard(),
                     const SizedBox(height: 16),
                     _buildWorkspaceSection(),
                     const SizedBox(height: 32),
@@ -1549,7 +1577,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return SliverToBoxAdapter(
       child: Container(
         padding: const EdgeInsets.only(
-          top: 60,
+          top: 30,
           left: 24,
           right: 24,
           bottom: 32,
@@ -1581,6 +1609,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(
+                      '${_getGreeting()},',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withOpacity(0.8),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                     Text(
                       'Hi, $_studentName 👋',
                       style: const TextStyle(
@@ -1882,7 +1919,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Welcome back, $_studentName!',
+                  '${_getGreeting()}, $_studentName!',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -1934,11 +1971,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               ],
             ),
           ),
-          Icon(
-            Icons.school,
-            size: 80,
-            color: Colors.white.withOpacity(0.2),
-          ),
+          Icon(Icons.school, size: 80, color: Colors.white.withOpacity(0.2)),
         ],
       ),
     );
@@ -1950,6 +1983,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     if (level <= 5) return Colors.orange[400]!;
     if (level <= 7) return Colors.yellow[700]!;
     return Colors.green[500]!;
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    if (hour < 21) return 'Good evening';
+    return 'Good night';
   }
 
   Widget _buildStudentInfoCard() {
@@ -1992,7 +2033,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       ),
                       Text(
                         widget.schoolName,
-                        style: const TextStyle(fontSize: 14, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ),
@@ -2020,7 +2064,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _getLevelColor(_studentLevel).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -2137,7 +2184,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               itemBuilder: (context, index) {
                 final period = todayPeriods[index];
                 final isBreak = period['type'] == 'break';
-                
+
                 final List<Color> gradientColors = isBreak
                     ? [Colors.orange[400]!, Colors.deepOrange[400]!]
                     : [Colors.blue[600]!, Colors.indigo[500]!];
@@ -2192,7 +2239,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                                     ),
                                   ),
                                   child: Text(
-                                    isBreak ? 'Break' : 'Period ${period['number']}',
+                                    isBreak
+                                        ? 'Break'
+                                        : 'Period ${period['number']}',
                                     style: const TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
@@ -2204,7 +2253,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                             ),
                             const Spacer(),
                             Text(
-                              isBreak ? 'Break Time' : (period['subject'] ?? 'No Subject'),
+                              isBreak
+                                  ? 'Break Time'
+                                  : (period['subject'] ?? 'No Subject'),
                               style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
@@ -2284,7 +2335,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 letterSpacing: -0.5,
               ),
             ),
-            Icon(Icons.more_horiz, color: Colors.grey[400]),
           ],
         ),
         const SizedBox(height: 20),
@@ -2306,86 +2356,68 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             builder: (context, constraints) {
               int crossAxisCount = _isMobile ? 3 : 6;
               if (constraints.maxWidth < 340) {
-                 crossAxisCount = 3; 
+                crossAxisCount = 3;
               }
               return GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: crossAxisCount,
-                mainAxisSpacing: 32,
+                mainAxisSpacing: 5,
                 crossAxisSpacing: 16,
                 childAspectRatio: constraints.maxWidth < 340 ? 0.7 : 0.8,
                 children: [
                   _buildPremiumAppIcon(
                     'Timetable',
-                    Icons.schedule,
-                    Colors.blue,
+                    'calendar',
                     _viewFullTimetable,
                   ),
                   _buildPremiumAppIcon(
                     'Attendance',
-                    Icons.how_to_reg,
-                    Colors.green,
+                    'checked-user-male',
                     _navigateToAttendance,
                   ),
                   _buildPremiumAppIcon(
                     'Assignments',
-                    Icons.assignment_turned_in,
-                    Colors.amber,
+                    'book-stack',
                     _navigateToAssignments,
                   ),
                   _buildPremiumAppIcon(
                     'Notices',
-                    Icons.campaign,
-                    Colors.purple,
+                    'megaphone',
                     _navigateToNotices,
                   ),
                   _buildPremiumAppIcon(
                     'Messages',
-                    Icons.chat_bubble_outline,
-                    Colors.lightBlue,
+                    'speech-bubble-with-dots',
                     _navigateToMessages,
                   ),
-                  _buildPremiumAppIcon(
-                    'Grades',
-                    Icons.workspace_premium,
-                    Colors.deepPurple,
-                    _navigateToGrades,
-                  ),
+                  _buildPremiumAppIcon('Grades', 'medal', _navigateToGrades),
                   _buildPremiumAppIcon(
                     'Performance',
-                    Icons.insights,
-                    Colors.deepOrange,
+                    'combo-chart',
                     _navigateToPerformance,
                   ),
                   _buildPremiumAppIcon(
                     'Exams',
-                    Icons.event_note,
-                    Colors.pink,
+                    'exam',
                     _navigateToExamSchedules,
                   ),
                   if (!_isMobile)
                     _buildPremiumAppIcon(
                       'Profile',
-                      Icons.person_outline,
-                      Colors.teal,
+                      'user-male-circle',
                       _showProfileDialog,
                     ),
+                  _buildPremiumAppIcon('AI Tutor', 'bot', _navigateToAIChat),
+                  _buildPremiumAppIcon('Fees', 'cash-in-hand', _navigateToFees),
                   _buildPremiumAppIcon(
-                    'AI Tutor',
-                    Icons.auto_awesome,
-                    Colors.indigo,
-                    _navigateToAIChat,
-                  ),
-                  _buildPremiumAppIcon(
-                    'Fees',
-                    Icons.account_balance_wallet,
-                    Colors.green,
-                    _navigateToFees,
+                    'Apply Leave',
+                    'exit',
+                    _navigateToApplyLeave,
                   ),
                 ],
               );
-            }
+            },
           ),
         ),
       ],
@@ -2394,12 +2426,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   Widget _buildPremiumAppIcon(
     String label,
-    IconData icon,
-    MaterialColor colorSwatch,
+    String iconName,
     VoidCallback onTap,
   ) {
-    Color primaryColor = colorSwatch[600] ?? colorSwatch;
-
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
@@ -2412,14 +2441,23 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               height: 64,
               width: 64,
               decoration: BoxDecoration(
-                color: colorSwatch[50] ?? primaryColor.withOpacity(0.12),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Center(
-                child: Icon(
-                  icon, 
-                  color: primaryColor, 
-                  size: 30,
+                child: CachedNetworkImage(
+                  imageUrl: 'https://img.icons8.com/fluency/96/000000/$iconName.png',
+                  width: 44,
+                  height: 44,
+                  errorWidget: (context, url, error) =>
+                      const Icon(Icons.apps, color: Colors.grey),
                 ),
               ),
             ),

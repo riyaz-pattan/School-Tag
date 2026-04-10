@@ -1,10 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:csv/csv.dart';
-import 'dart:io';
 
 class AddUsersScreen extends StatefulWidget {
   final String userId;
@@ -16,7 +12,7 @@ class AddUsersScreen extends StatefulWidget {
 }
 
 class _AddUsersScreenState extends State<AddUsersScreen> {
-  String? _selectedRole = 'admin';
+  final String _selectedRole = 'admin';
   final _usernameController = TextEditingController();
   final _fullNameController = TextEditingController();
   final _mobileController = TextEditingController();
@@ -31,7 +27,6 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
 
   List<String> _availableSchoolCodes = [];
   List<String> _availableSchoolNames = [];
-  Map<String, String> _schoolCodeToName = {};
 
   final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
@@ -66,12 +61,9 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
         _availableSchoolNames = snapshot.docs
             .map((doc) => doc['name'] as String)
             .toList();
-        _schoolCodeToName = {
-          for (var doc in snapshot.docs) doc.id: doc['name'] as String,
-        };
       });
     } catch (e) {
-      print('Error fetching schools: $e');
+      debugPrint('Error fetching schools: $e');
     }
   }
 
@@ -79,31 +71,22 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
     final username = _usernameController.text.trim();
     final schoolCode = _schoolCodeController.text.trim();
     final password = _passwordController.text.trim();
-    final fullName = _fullNameController.text.trim(); // NEW: Get full name
+    final fullName = _fullNameController.text.trim();
 
     if (username.isEmpty) {
-      setState(() {
-        _errorMessage = 'Admin ID is required';
-      });
+      setState(() => _errorMessage = 'Admin ID is required');
       return;
     }
     if (schoolCode.isEmpty) {
-      setState(() {
-        _errorMessage = 'School code is required';
-      });
+      setState(() => _errorMessage = 'School code is required');
       return;
     }
     if (password.isEmpty || password.length < 6) {
-      setState(() {
-        _errorMessage = 'Password must be at least 6 characters';
-      });
+      setState(() => _errorMessage = 'Password must be at least 6 characters');
       return;
     }
-    // NEW: Check if full name is provided
     if (fullName.isEmpty) {
-      setState(() {
-        _errorMessage = 'Full Name is required';
-      });
+      setState(() => _errorMessage = 'Full Name is required');
       return;
     }
 
@@ -113,85 +96,63 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
     });
 
     try {
-      // Prepare user data for cloud function
       Map<String, dynamic> userData = {
         'username': username,
         'role': _selectedRole,
         'schoolCode': schoolCode,
         'password': password,
         'status': _status,
-        'full_name':
-            fullName, // NEW: Always include full name as required field
+        'full_name': fullName,
       };
 
-      // Add optional fields (excluding full_name since it's now required and already added above)
       _addOptionalField(userData, _mobileController.text, 'mobile_number');
       _addOptionalField(userData, _gmailController.text, 'gmail');
-      _addOptionalField(
-        userData,
-        _alternateMobileController.text,
-        'alternate_mobile_number',
-      );
-      _addOptionalField(
-        userData,
-        _schoolTelephoneController.text,
-        'school_telephone_number',
-      );
+      _addOptionalField(userData, _alternateMobileController.text, 'alternate_mobile_number');
+      _addOptionalField(userData, _schoolTelephoneController.text, 'school_telephone_number');
 
-      // Call cloud function
       final result = await _functions.httpsCallable('createUser').call({
         'userData': userData,
       });
 
       final response = result.data;
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(response['message']),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 5),
+          content: Row(
+            children: [
+               const Icon(Icons.check_circle_outline, color: Colors.white),
+               const SizedBox(width: 12),
+               Expanded(child: Text(response['message'] ?? 'User created successfully', style: const TextStyle(fontWeight: FontWeight.bold))),
+            ],
+          ),
+          backgroundColor: const Color(0xFF006D36),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          margin: const EdgeInsets.all(20),
         ),
       );
 
       _clearFields();
     } catch (e) {
-      print('Error creating user: $e');
-
-      // Extract the actual error message from the Firebase Functions exception
       String errorMessage = 'Error creating user';
       if (e is FirebaseFunctionsException) {
         errorMessage = e.message ?? 'Unknown error occurred';
       } else if (e.toString().contains('already-exists')) {
-        errorMessage =
-            'Username already exists. Please try a different username.';
+         errorMessage = 'Username already exists. Please try a different username.';
       } else if (e.toString().contains('permission-denied')) {
-        errorMessage =
-            'Permission denied. You are not authorized to perform this action.';
-      } else if (e.toString().contains('invalid-argument')) {
-        errorMessage = 'Invalid input. Please check your data and try again.';
-      } else {
-        errorMessage = 'Error creating user: ${e.toString()}';
+        errorMessage = 'Permission denied. You are not authorized to perform this action.';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-        ),
-      );
+      setState(() => _errorMessage = errorMessage);
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  void _addOptionalField(
-    Map<String, dynamic> data,
-    String value,
-    String fieldName,
-  ) {
+  void _addOptionalField(Map<String, dynamic> data, String value, String fieldName) {
     if (value.trim().isNotEmpty) {
       data[fieldName] = value.trim();
     }
@@ -214,202 +175,309 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width > 800;
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF4FAFF),
       appBar: AppBar(
-        title: const Text('Add Admin User'),
-        backgroundColor: Colors.blue[700],
+        title: const Text('Add Admin User', style: TextStyle(color: Color(0xFF001F2A), fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFFFFFFFF),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF001F2A)),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Add Admin User',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-
-            // Username Field
-            TextField(
-              controller: _usernameController,
-              decoration: const InputDecoration(
-                labelText: 'Admin ID (Username) *',
-                hintText: 'Enter Admin ID/Username',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // School Selection
-            DropdownButtonFormField<String>(
-              value: _schoolCodeController.text.isEmpty
-                  ? null
-                  : _schoolCodeController.text,
-              decoration: const InputDecoration(
-                labelText: 'School *',
-                border: OutlineInputBorder(),
-              ),
-              hint: const Text('Select a school'),
-              items: List.generate(_availableSchoolCodes.length, (index) {
-                return DropdownMenuItem<String>(
-                  value: _availableSchoolCodes[index],
-                  child: Text(
-                    '${_availableSchoolNames[index]} (${_availableSchoolCodes[index]})',
-                  ),
-                );
-              }),
-              onChanged: (String? newValue) {
-                setState(() {
-                  _schoolCodeController.text = newValue ?? '';
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Full Name Field (Now Required)
-            TextField(
-              controller: _fullNameController,
-              decoration: const InputDecoration(
-                labelText: 'Full Name *',
-                hintText: 'Enter full name',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Password Field
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(
-                labelText: 'Password *',
-                hintText: 'Set a password (min 6 chars)',
-                border: OutlineInputBorder(),
-              ),
-              obscureText: true,
-            ),
-            const SizedBox(height: 16),
-
-            // Optional Fields
-            TextField(
-              controller: _mobileController,
-              decoration: const InputDecoration(
-                labelText: 'Mobile Number (Optional)',
-                hintText: 'Enter mobile number',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 16),
-
-            TextField(
-              controller: _gmailController,
-              decoration: const InputDecoration(
-                labelText: 'Gmail (Optional)',
-                hintText: 'Enter gmail address',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 16),
-
-            // Admin Specific Fields
-            TextField(
-              controller: _alternateMobileController,
-              decoration: const InputDecoration(
-                labelText: 'Alternate Mobile Number (Optional)',
-                hintText: 'Enter alternate mobile number',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 16),
-
-            TextField(
-              controller: _schoolTelephoneController,
-              decoration: const InputDecoration(
-                labelText: 'School Telephone Number (Optional)',
-                hintText: 'Enter school telephone number',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 16),
-
-            // Status Field
-            DropdownButtonFormField<String>(
-              value: _status,
-              decoration: const InputDecoration(
-                labelText: 'Status',
-                border: OutlineInputBorder(),
-              ),
-              items: ['active', 'inactive'].map((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value),
-                );
-              }).toList(),
-              onChanged: (String? newValue) {
-                setState(() {
-                  _status = newValue;
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Error Message
-            if (_errorMessage != null) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red[50],
-                  borderRadius: BorderRadius.circular(8),
+        child: Center(
+          child: Container(
+            width: isDesktop ? 600 : double.infinity,
+            margin: EdgeInsets.all(isDesktop ? 32 : 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFFFF),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF001F2A).withOpacity(0.06),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error, color: Colors.red, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _errorMessage!,
-                        style: const TextStyle(color: Colors.red, fontSize: 14),
+              ],
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(isDesktop ? 40 : 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE6F6FF),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(Icons.person_add_rounded, color: Color(0xFF00113A), size: 28),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Create New Admin',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF001F2A),
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Provision a new administrative account for a specific school branch.',
+                    style: TextStyle(color: Color(0xFF757682), fontSize: 14),
+                  ),
+                  const SizedBox(height: 32),
+
+                  _buildModernTextField(
+                    controller: _usernameController,
+                    label: 'Admin ID (Username) *',
+                    icon: Icons.badge_rounded,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildModernDropdown(),
+                  const SizedBox(height: 16),
+                  _buildModernTextField(
+                    controller: _fullNameController,
+                    label: 'Full Name *',
+                    icon: Icons.person_rounded,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildModernTextField(
+                    controller: _passwordController,
+                    label: 'Password *',
+                    icon: Icons.lock_rounded,
+                    isPassword: true,
+                  ),
+                  
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Divider(color: Color(0xFFE6F6FF)),
+                  ),
+                  const Text(
+                    'Optional Contact Information',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF757682)),
+                  ),
+                  const SizedBox(height: 16),
+
+                  _buildModernTextField(
+                    controller: _mobileController,
+                    label: 'Mobile Number',
+                    icon: Icons.phone_rounded,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildModernTextField(
+                    controller: _gmailController,
+                    label: 'Gmail Address',
+                    icon: Icons.email_rounded,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildModernTextField(
+                    controller: _alternateMobileController,
+                    label: 'Alternate Mobile',
+                    icon: Icons.phone_android_rounded,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildModernTextField(
+                    controller: _schoolTelephoneController,
+                    label: 'School Telephone',
+                    icon: Icons.phone_in_talk_rounded,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildStatusDropdown(),
+
+                  if (_errorMessage != null) ...[
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.red.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline_rounded, color: Colors.red),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
 
-            // Action Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _createUser,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[700],
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF00113A), Color(0xFF399E9D)],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
                         ),
-                      )
-                    : const Text(
-                        'Create Admin',
-                        style: TextStyle(fontSize: 16, color: Colors.white),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                           BoxShadow(
+                             color: const Color(0xFF00113A).withOpacity(0.2),
+                             blurRadius: 12,
+                             offset: const Offset(0, 4),
+                           ),
+                        ],
                       ),
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _createUser,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                              )
+                            : const Text(
+                                'Create Admin',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildModernTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool isPassword = false,
+    TextInputType? keyboardType,
+  }) {
+    return TextField(
+      controller: controller,
+      obscureText: isPassword,
+      keyboardType: keyboardType,
+      style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF001F2A)),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Color(0xFF757682)),
+        prefixIcon: Icon(icon, color: const Color(0xFF757682)),
+        filled: true,
+        fillColor: const Color(0xFFF4FAFF),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFE6F6FF), width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFF006D36), width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      ),
+    );
+  }
+
+  Widget _buildModernDropdown() {
+    return DropdownButtonFormField<String>(
+      isExpanded: true,
+      value: _schoolCodeController.text.isEmpty ? null : _schoolCodeController.text,
+      icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF757682)),
+      decoration: InputDecoration(
+        labelText: 'School *',
+        labelStyle: const TextStyle(color: Color(0xFF757682)),
+        prefixIcon: const Icon(Icons.account_balance_rounded, color: Color(0xFF757682)),
+        filled: true,
+        fillColor: const Color(0xFFF4FAFF),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFE6F6FF), width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFF006D36), width: 2),
+        ),
+      ),
+      items: List.generate(_availableSchoolCodes.length, (index) {
+        return DropdownMenuItem(
+          value: _availableSchoolCodes[index],
+          child: Text(
+            '${_availableSchoolNames[index]} (${_availableSchoolCodes[index]})',
+            style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF001F2A)),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        );
+      }),
+      onChanged: (newValue) {
+        setState(() {
+          _schoolCodeController.text = newValue ?? '';
+        });
+      },
+    );
+  }
+
+  Widget _buildStatusDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _status,
+      icon: const Icon(Icons.arrow_drop_down_rounded, color: Color(0xFF757682)),
+      decoration: InputDecoration(
+        labelText: 'Account Status',
+        labelStyle: const TextStyle(color: Color(0xFF757682)),
+        prefixIcon: Icon(
+          _status == 'active' ? Icons.check_circle_rounded : Icons.cancel_rounded,
+          color: _status == 'active' ? const Color(0xFF006D36) : Colors.red,
+        ),
+        filled: true,
+        fillColor: const Color(0xFFF4FAFF),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFE6F6FF), width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFF006D36), width: 2),
+        ),
+      ),
+      items: const [
+        DropdownMenuItem(value: 'active', child: Text('Active', style: TextStyle(fontWeight: FontWeight.w600))),
+        DropdownMenuItem(value: 'inactive', child: Text('Inactive', style: TextStyle(fontWeight: FontWeight.w600))),
+      ],
+      onChanged: (newValue) {
+        setState(() {
+          _status = newValue;
+        });
+      },
     );
   }
 }

@@ -317,7 +317,6 @@ class _AdminFeeStructureScreenState extends State<AdminFeeStructureScreen> {
             ),
           ),
 
-          // Action buttons
           if (isPublished)
             Container(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -330,6 +329,23 @@ class _AdminFeeStructureScreenState extends State<AdminFeeStructureScreen> {
                       label: const Text('Sync Students'),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _confirmDelete(structure),
+                      icon: const Icon(Icons.delete_outline,
+                          size: 18, color: Colors.red),
+                      label: const Text('Delete',
+                          style: TextStyle(color: Colors.red)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: const BorderSide(color: Colors.red),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -1263,10 +1279,11 @@ class _AdminFeeStructureScreenState extends State<AdminFeeStructureScreen> {
                   );
                 }
               } catch (e) {
+                if (context.mounted) Navigator.pop(context);
                 if (mounted) {
                   ScaffoldMessenger.of(this.context).showSnackBar(
                     SnackBar(
-                      content: Text('Error: $e'),
+                      content: Text(e.toString().replaceAll('Exception: ', '')),
                       backgroundColor: Colors.red,
                     ),
                   );

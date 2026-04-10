@@ -2617,3 +2617,89 @@ exports.sendFeeReminder = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', `Failed to send reminder: ${error.message}`);
   }
 });
+
+// ─── 6. Leave Application Notifications ─────────────────────────────────
+exports.onLeaveApplicationCreated = functions.firestore
+  .document('schools/{schoolCode}/leave_applications/{leaveId}')
+  .onCreate(async (snap, context) => {
+    const { schoolCode } = context.params;
+    const leaveData = snap.data();
+    
+    // We only care if there is a class_id
+    if (!leaveData.class_id) {
+      console.log('No class_id found in leave application, skipping notification.');
+      return null;
+    }
+    
+    try {
+      // Find teachers assigned to this class
+      // Timetable structure: schools/{schoolCode}/timetables/{classId}
+      const timetableDoc = await db.collection('schools')
+        .doc(schoolCode)
+        .collection('timetables')
+        .doc(leaveData.class_id)
+        .get();
+        
+      if (!timetableDoc.exists) {
+        console.log(`No timetable found for class ${leaveData.class_id}, cannot determine class teachers.`);
+        return null;
+      }
+      
+      const timetableData = timetableDoc.data().timetable || {};
+      const teacherIds = new Set();
+      
+      // Extract all unique teacher IDs from the timetable
+      for (const day of Object.keys(timetableData)) {
+        const periods = timetableData[day] || [];
+        for (const period of periods) {
+          if (period.type === 'period' && period.teacher_id) {
+            teacherIds.add(period.teacher_id);
+          }
+        }
+      }
+      
+      if (teacherIds.size === 0) {
+        console.log('No teachers found in timetable.');
+        return null;
+      }
+      
+      const tokens = [];
+      // Fetch FCM tokens for all these teachers
+      for (const teacherId of teacherIds) {
+        const teacherDoc = await db.collection('users').doc(teacherId).get();
+        if (teacherDoc.exists) {
+          const teacherTokens = teacherDoc.data().fcm_tokens || [];
+          tokens.push(...teacherTokens);
+        }
+      }
+      
+      if (tokens.length === 0) {
+        console.log('None of the assigned teachers have FCM tokens.');
+        return null;
+      }
+      
+      const payload = {
+        notification: {
+          title: 'New Leave Application',
+          body: `${leaveData.student_name} applied for leave on ${leaveData.date}. Reason: ${leaveData.reason || 'None provided'}`,
+        },
+        data: {
+          type: 'leave_application',
+          classId: leaveData.class_id,
+        }
+      };
+      
+      const response = await admin.messaging().sendEachForMulticast({
+        tokens: tokens,
+        notification: payload.notification,
+        data: payload.data,
+      });
+      
+      console.log(`Successfully sent ${response.successCount} messages. Failed: ${response.failureCount}`);
+      return null;
+      
+    } catch (error) {
+      console.error('Error sending leave notification:', error);
+      return null;
+    }
+  });

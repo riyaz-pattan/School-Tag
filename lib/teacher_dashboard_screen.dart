@@ -1,5 +1,6 @@
 // teacher_dashboard_screen.dart
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1475,6 +1476,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                     _buildModernWorkspace(),
                     const SizedBox(height: 32),
                     _buildMyClassesCarousel(),
+                    const SizedBox(height: 32),
+                    _buildUpcomingLeavesWidget(),
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -1483,6 +1486,128 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildUpcomingLeavesWidget() {
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('schools')
+          .doc(widget.schoolCode)
+          .collection('leave_applications')
+          .where('date', isGreaterThanOrEqualTo: DateFormat('yyyy-MM-dd').format(DateTime.now()))
+          .orderBy('date')
+          .limit(50)
+          .get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+        
+        final assignedClassIds = _assignedClasses.map((c) => c['classId'] as String).toSet();
+        
+        final leaves = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return assignedClassIds.contains(data['class_id']);
+        }).toList();
+
+        if (leaves.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Upcoming Student Leaves',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D2D3A),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...leaves.take(5).map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final dateStr = data['date'] ?? '';
+              DateTime? date;
+              try { date = DateFormat('yyyy-MM-dd').parse(dateStr); } catch (_) {}
+              final formattedDate = date != null ? DateFormat('MMM d').format(date) : dateStr;
+              final type = data['type'] ?? 'Other';
+              
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6C63FF).withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.grey[100]!),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6B6B).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.event_busy_rounded,
+                        color: Color(0xFFFF6B6B),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data['student_name'] ?? 'Unknown Student',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: Color(0xFF2D2D3A),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '$type • ${data['reason'] ?? ''}',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 13,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6C63FF).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        formattedDate,
+                        style: const TextStyle(
+                          color: Color(0xFF6C63FF),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ],
+        );
+      },
     );
   }
 
@@ -1520,7 +1645,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Good Morning,',
+                        '${_getGreeting()},',
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.8),
                           fontSize: 16,
@@ -1529,7 +1654,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _teacherName,
+                        '$_teacherName 👋',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 28,
@@ -1589,6 +1714,14 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
         ),
       ),
     );
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    if (hour < 21) return 'Good evening';
+    return 'Good night';
   }
 
   Widget _buildStatsRow(String attendanceTypeText) {
@@ -1716,56 +1849,48 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
             crossAxisCount: _isMobile ? 4 : (_isTablet ? 6 : 8),
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 24,
+            mainAxisSpacing: 12,
             crossAxisSpacing: 16,
             childAspectRatio: MediaQuery.of(context).size.width < 350 ? 0.65 : 0.75,
             children: [
               _buildModernAppIcon(
                 'Attendance',
-                Icons.how_to_reg,
-                Colors.teal,
+                'checked-user-male',
                 _navigateToAttendance,
               ),
               _buildModernAppIcon(
                 'Assignments',
-                Icons.book,
-                Colors.orange,
+                'book-stack',
                 _navigateToAssignments,
               ),
               _buildModernAppIcon(
                 'Grades',
-                Icons.grade,
-                Colors.amber,
+                'medal',
                 _navigateToAssignGrades,
               ),
               _buildModernAppIcon(
                 'Notices',
-                Icons.notification_important,
-                Colors.redAccent,
+                'megaphone',
                 _navigateToNotices,
               ),
               _buildModernAppIcon(
                 'Messages',
-                Icons.message,
-                Colors.blue,
+                'speech-bubble-with-dots',
                 _navigateToMessages,
               ),
               _buildModernAppIcon(
                 'Exams',
-                Icons.event_note,
-                Colors.indigo,
+                'exam',
                 _navigateToExamSchedules,
               ),
               _buildModernAppIcon(
                 'Timetable',
-                Icons.calendar_today,
-                Colors.cyan,
+                'calendar',
                 _showMyTimetable,
               ),
               _buildModernAppIcon(
                 'Settings',
-                Icons.settings,
-                Colors.grey,
+                'settings',
                 _showChangePasswordDialog,
               ),
             ],
@@ -1777,8 +1902,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
 
   Widget _buildModernAppIcon(
     String label,
-    IconData icon,
-    Color color,
+    String iconName,
     VoidCallback onTap,
   ) {
     return GestureDetector(
@@ -1791,11 +1915,25 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
             height: 60,
             width: 60,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.08),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withOpacity(0.15), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: Center(child: Icon(icon, color: color, size: 28)),
+            child: Center(
+              child: CachedNetworkImage(
+                imageUrl: 'https://img.icons8.com/fluency/96/000000/$iconName.png',
+                width: 32,
+                height: 32,
+                errorWidget: (context, url, error) =>
+                    const Icon(Icons.error_outline, color: Colors.grey),
+              ),
+            ),
           ),
           const Spacer(),
           Text(
@@ -1803,7 +1941,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              color: Colors.grey[800],
             ),
             textAlign: TextAlign.center,
             maxLines: 1,
@@ -2071,7 +2209,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Welcome back, $_teacherName!',
+                  '${_getGreeting()}, $_teacherName!',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,

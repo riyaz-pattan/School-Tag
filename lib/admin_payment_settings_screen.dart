@@ -1,14 +1,12 @@
 // admin_payment_settings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
 
 class AdminPaymentSettingsScreen extends StatefulWidget {
   final String schoolCode;
 
-  const AdminPaymentSettingsScreen({
-    super.key,
-    required this.schoolCode,
-  });
+  const AdminPaymentSettingsScreen({super.key, required this.schoolCode});
 
   @override
   State<AdminPaymentSettingsScreen> createState() =>
@@ -100,15 +98,11 @@ class _AdminPaymentSettingsScreenState
           .collection('settings')
           .doc('payment_config');
 
-      batch.set(
-        configRef,
-        {
-          'razorpayKeyId': _keyIdController.text.trim(),
-          'isPaymentEnabled': _isPaymentEnabled,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      batch.set(configRef, {
+        'razorpayKeyId': _keyIdController.text.trim(),
+        'isPaymentEnabled': _isPaymentEnabled,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       // Save private secrets (only Cloud Functions should read this)
       final secretsRef = FirebaseFirestore.instance
@@ -117,15 +111,11 @@ class _AdminPaymentSettingsScreenState
           .collection('settings')
           .doc('payment_secrets');
 
-      batch.set(
-        secretsRef,
-        {
-          'razorpayKeySecret': _keySecretController.text.trim(),
-          'webhookSecret': _webhookSecretController.text.trim(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      batch.set(secretsRef, {
+        'razorpayKeySecret': _keySecretController.text.trim(),
+        'webhookSecret': _webhookSecretController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       await batch.commit();
 
@@ -252,19 +242,75 @@ class _AdminPaymentSettingsScreenState
                     ),
                     const SizedBox(height: 20),
 
-                    // Webhook Secret
+                    // Webhook URL
                     _buildSectionHeader(
-                      'Webhook Secret',
+                      'Webhook URL',
                       Icons.webhook,
                       Colors.purple,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Set this same value in your Razorpay Dashboard → Webhooks',
-                      style: TextStyle(
-                        color: Colors.grey[500],
-                        fontSize: 12,
+                      'Copy this URL and paste it in your Razorpay Dashboard → Webhooks',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
                       ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'https://us-central1-student-app-c362d.cloudfunctions.net/razorpayWebhook',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontFamily: 'monospace',
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.copy, size: 20),
+                            onPressed: () {
+                              Clipboard.setData(
+                                const ClipboardData(
+                                  text:
+                                      'https://us-central1-student-app-c362d.cloudfunctions.net/razorpayWebhook',
+                                ),
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Webhook URL copied to clipboard',
+                                  ),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            tooltip: 'Copy URL',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Webhook Secret
+                    _buildSectionHeader(
+                      'Webhook Secret',
+                      Icons.security,
+                      Colors.purple,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Create a secret string here and use the EXACT SAME value in your Razorpay Dashboard.',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
@@ -282,8 +328,9 @@ class _AdminPaymentSettingsScreenState
                                 ? Icons.visibility_off
                                 : Icons.visibility,
                           ),
-                          onPressed: () =>
-                              setState(() => _obscureWebhook = !_obscureWebhook),
+                          onPressed: () => setState(
+                            () => _obscureWebhook = !_obscureWebhook,
+                          ),
                         ),
                         filled: true,
                         fillColor: Colors.white,
@@ -344,8 +391,11 @@ class _AdminPaymentSettingsScreenState
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.warning_amber,
-                              color: Colors.amber[800], size: 20),
+                          Icon(
+                            Icons.warning_amber,
+                            color: Colors.amber[800],
+                            size: 20,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -386,7 +436,8 @@ class _AdminPaymentSettingsScreenState
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                   valueColor: AlwaysStoppedAnimation(
-                                      Colors.white),
+                                    Colors.white,
+                                  ),
                                 ),
                               )
                             : const Text(
@@ -449,8 +500,8 @@ class _AdminPaymentSettingsScreenState
                 Text(
                   _isConfigured
                       ? _isPaymentEnabled
-                          ? 'Payments are live and active'
-                          : 'Configured but payments disabled'
+                            ? 'Payments are live and active'
+                            : 'Configured but payments disabled'
                       : 'Enter your Razorpay credentials to get started',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.8),
@@ -492,10 +543,17 @@ class _AdminPaymentSettingsScreenState
           const SizedBox(height: 10),
           _buildStep('1', 'Log in to dashboard.razorpay.com'),
           _buildStep('2', 'Go to Account & Settings → API Keys'),
-          _buildStep('3', 'Generate Key ID & Secret (Test or Live)'),
-          _buildStep('4', 'Paste them in the fields below'),
+          _buildStep(
+            '3',
+            'Click "Generate Key ID & Secret" (Keep the Secret safe!)',
+          ),
+          _buildStep(
+            '4',
+            'Copy the Key ID and Key Secret into the fields below',
+          ),
           _buildStep('5', 'Go to Settings → Webhooks → Add New'),
-          _buildStep('6', 'Set your Webhook URL and Secret'),
+          _buildStep('6', 'Paste the Webhook URL (from below) and your Secret'),
+          _buildStep('7', 'Select "order.paid" in Active Events and save'),
         ],
       ),
     );
@@ -547,10 +605,7 @@ class _AdminPaymentSettingsScreenState
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 15,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
         ),
       ],
     );

@@ -56,17 +56,60 @@ class FeeService {
         .update(updates);
   }
 
-  /// Delete a draft fee structure (cannot delete published ones)
+  /// Check if a fee structure has any active payments (not pending or waived)
+  static Future<bool> hasPayments({
+    required String schoolCode,
+    required String structureId,
+  }) async {
+    final dues = await _firestore
+        .collection('schools')
+        .doc(schoolCode)
+        .collection('student_dues')
+        .where('structureId', isEqualTo: structureId)
+        .get();
+
+    return dues.docs.any((doc) {
+      final status = doc.data()['status'] as String? ?? 'pending';
+      return status != 'pending' && status != 'waived';
+    });
+  }
+
+  /// Delete a fee structure (checks for safety lock)
   static Future<void> deleteFeeStructure({
     required String schoolCode,
     required String structureId,
   }) async {
-    await _firestore
+    final hasActivePayments = await hasPayments(
+      schoolCode: schoolCode,
+      structureId: structureId,
+    );
+
+    if (hasActivePayments) {
+      throw Exception('Cannot delete a fee structure that has active payments.');
+    }
+
+    final batch = _firestore.batch();
+    
+    // Delete all student dues associated with it
+    final dues = await _firestore
+        .collection('schools')
+        .doc(schoolCode)
+        .collection('student_dues')
+        .where('structureId', isEqualTo: structureId)
+        .get();
+        
+    for (final doc in dues.docs) {
+      batch.delete(doc.reference);
+    }
+    
+    // Delete the structure itself
+    batch.delete(_firestore
         .collection('schools')
         .doc(schoolCode)
         .collection('fee_structures')
-        .doc(structureId)
-        .delete();
+        .doc(structureId));
+
+    await batch.commit();
   }
 
   /// Stream all fee structures for a school
@@ -330,6 +373,59 @@ class FeeService {
     await batch.commit();
   }
 
+  /// Admin: Mark a student due as paid manually (offline payment)
+  static Future<void> markAsPaidManually({
+    required String schoolCode,
+    required String dueId,
+    required String paymentMode,
+    required String referenceNumber,
+    required String adminId,
+  }) async {
+    final batch = _firestore.batch();
+    final dueRef = _firestore
+        .collection('schools')
+        .doc(schoolCode)
+        .collection('student_dues')
+        .doc(dueId);
+
+    batch.update(dueRef, {
+      'status': 'paid',
+      'paidAt': FieldValue.serverTimestamp(),
+      'razorpayPaymentId': 'MANUAL_OFFLINE',
+      'note': 'Paid via $paymentMode (Ref: $referenceNumber) by Admin: $adminId',
+    });
+
+    final dueDoc = await dueRef.get();
+    if (dueDoc.exists) {
+      final dueData = dueDoc.data() as Map<String, dynamic>;
+      final txnRef = _firestore
+          .collection('schools')
+          .doc(schoolCode)
+          .collection('transactions')
+          .doc();
+
+      batch.set(txnRef, {
+        'dueId': dueId,
+        'studentId': dueData['studentId'],
+        'studentName': dueData['studentName'],
+        'className': dueData['className'],
+        'razorpayOrderId': 'MANUAL_OFFLINE',
+        'razorpayPaymentId': 'MANUAL_OFFLINE',
+        'amount': dueData['amount'],
+        'currency': 'INR',
+        'status': 'paid_offline',
+        'failureReason': null,
+        'refundId': null,
+        'refundReason': 'Mode: $paymentMode, Ref: $referenceNumber',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'schoolCode': schoolCode,
+      });
+    }
+
+    await batch.commit();
+  }
+
   // ─── Razorpay Order (calls Cloud Function) ───────────────────────────────
 
   /// Create a Razorpay order for a specific due
@@ -338,13 +434,33 @@ class FeeService {
     required String dueId,
     required String studentId,
   }) async {
-    final callable = _functions.httpsCallable('createRazorpayOrder');
-    final result = await callable.call({
-      'schoolCode': schoolCode,
-      'dueId': dueId,
-      'studentId': studentId,
-    });
-    return Map<String, dynamic>.from(result.data);
+    try {
+      print('🚀 [FeeService] Calling createRazorpayOrder Cloud Function...');
+      print('   - schoolCode: $schoolCode');
+      print('   - dueId: $dueId');
+      print('   - studentId: $studentId');
+
+      final callable = _functions.httpsCallable('createRazorpayOrder');
+      final result = await callable.call({
+        'schoolCode': schoolCode,
+        'dueId': dueId,
+        'studentId': studentId,
+      });
+
+      print('✅ [FeeService] Order created successfully!');
+      print('   - Result: ${result.data}');
+
+      return Map<String, dynamic>.from(result.data);
+    } on FirebaseFunctionsException catch (e) {
+      print('❌ [FeeService] FirebaseFunctionsException:');
+      print('   - Code: ${e.code}');
+      print('   - Message: ${e.message}');
+      print('   - Details: ${e.details}');
+      rethrow;
+    } catch (e) {
+      print('❌ [FeeService] Unexpected error: $e');
+      rethrow;
+    }
   }
 
   /// Verify payment after Razorpay checkout success (client-side verification)
