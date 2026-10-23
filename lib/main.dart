@@ -11,6 +11,7 @@ import 'package:student_app/admin_dashboard_screen.dart';
 import 'package:student_app/teacher_dashboard_screen.dart';
 import 'package:student_app/student_dashboard_screen.dart';
 import 'package:student_app/super_admin_home_screen.dart';
+import 'package:student_app/driver_dashboard_screen.dart';
 import 'firebase_options.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -245,6 +246,14 @@ class _AuthWrapperState extends State<AuthWrapper> {
                 _initialScreen = StudentDashboardScreen(
                   userId: userId,
                   schoolName: schoolName,
+                  schoolCode: schoolCode,
+                );
+                _isLoading = false;
+              });
+              break;
+            case 'driver':
+              setState(() {
+                _initialScreen = DriverDashboardScreen(
                   schoolCode: schoolCode,
                 );
                 _isLoading = false;

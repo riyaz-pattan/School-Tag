@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'teacher_dashboard_screen.dart';
 import 'student_dashboard_screen.dart';
 import 'admin_dashboard_screen.dart';
+import 'driver_dashboard_screen.dart';
 import 'super_admin_home_screen.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
@@ -466,6 +467,11 @@ class _InitialLoginScreenState extends State<InitialLoginScreen> {
         destinationScreen = StudentDashboardScreen(
           userId: userId,
           schoolName: schoolName,
+          schoolCode: schoolCode,
+        );
+        break;
+      case 'driver':
+        destinationScreen = DriverDashboardScreen(
           schoolCode: schoolCode,
         );
         break;

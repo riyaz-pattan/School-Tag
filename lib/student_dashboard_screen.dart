@@ -20,6 +20,8 @@ import 'ai_chat_screen.dart';
 import 'widgets/dashboard_skeleton.dart';
 import 'student_fee_screen.dart';
 import 'student_apply_leave_screen.dart';
+import 'services/remote_config_service.dart';
+import 'live_tracking_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   final String userId;
@@ -50,6 +52,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Map<String, dynamic>? _schoolData;
   Map<String, String> _teacherNameMap = {};
   int _studentLevel = 5;
+  bool _isBusTrackingEnabled = false;
+  final RemoteConfigService _remoteConfigService = RemoteConfigService();
 
   // Cache keys
   static const String _studentDataCacheKey = 'student_data';
@@ -86,13 +90,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   Future<void> _loadInitialData() async {
     try {
-      // Load cached data first for immediate display
       await _loadCachedData();
       // Then load fresh data in background
       await _loadFreshData();
       await _initializeFCM();
+      await _remoteConfigService.initialize();
       if (mounted) {
         setState(() {
+          _isBusTrackingEnabled = _remoteConfigService.isBusTrackingEnabled(widget.schoolCode);
           _isLoading = false;
         });
       }
@@ -1207,6 +1212,17 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               ],
             )
           : null,
+    );
+  }
+
+  void _navigateToLiveTracking() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LiveTrackingScreen(
+          schoolCode: widget.schoolCode,
+        ),
+      ),
     );
   }
 
@@ -2397,6 +2413,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     'combo-chart',
                     _navigateToPerformance,
                   ),
+                  if (_isBusTrackingEnabled)
+                    _buildPremiumAppIcon(
+                      'Track Bus',
+                      'bus', // using bus icon (placeholder)
+                      _navigateToLiveTracking,
+                    ),
                   _buildPremiumAppIcon(
                     'Exams',
                     'exam',

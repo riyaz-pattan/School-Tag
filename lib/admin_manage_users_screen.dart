@@ -4962,7 +4962,7 @@ class _AdminEditUserDialogState extends State<AdminEditUserDialog> {
                         labelText: 'Role',
                         border: OutlineInputBorder(),
                       ),
-                      items: ['student', 'teacher'].map((String role) {
+                      items: ['student', 'teacher', 'driver'].map((String role) {
                         return DropdownMenuItem<String>(
                           value: role,
                           child: Text(

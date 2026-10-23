@@ -23,6 +23,10 @@ import 'messages_screen.dart';
 import 'widgets/dashboard_skeleton.dart';
 import 'admin_fee_structure_screen.dart';
 import 'dart:async';
+import 'services/remote_config_service.dart';
+import 'live_tracking_screen.dart';
+import 'admin_route_management_screen.dart';
+import 'admin_bus_management_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   final String userId;
@@ -64,6 +68,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // Dispose protection
   bool _isDisposed = false;
   StreamSubscription<String>? _fcmSubscription;
+  bool _isBusTrackingEnabled = false;
+  final RemoteConfigService _remoteConfigService = RemoteConfigService();
 
   @override
   void initState() {
@@ -81,6 +87,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     _loadDashboardData();
     _initializeFCM();
     _loadAdminData();
+    _initRemoteConfig();
+  }
+
+  Future<void> _initRemoteConfig() async {
+    await _remoteConfigService.initialize();
+    _safeSetState(() {
+      _isBusTrackingEnabled = _remoteConfigService.isBusTrackingEnabled(widget.schoolCode);
+    });
   }
 
   @override
@@ -973,6 +987,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
+  void _navigateToRouteManagement() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AdminRouteManagementScreen(
+          schoolCode: widget.schoolCode,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToBusManagement() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AdminBusManagementScreen(
+          schoolCode: widget.schoolCode,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToLiveTracking() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LiveTrackingScreen(
+          schoolCode: widget.schoolCode,
+        ),
+      ),
+    );
+  }
+
   Widget _buildMobileDrawer() {
     return Drawer(
       child: ListView(
@@ -1647,6 +1694,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     'book-stack',
                     _navigateToManageSubjects,
                   ),
+                  if (_isBusTrackingEnabled) ...[
+                    _buildFlatAppIcon(
+                      'Manage Routes',
+                      'bus',
+                      _navigateToRouteManagement,
+                    ),
+                    _buildFlatAppIcon(
+                      'Manage Buses',
+                      'delivery-truck', 
+                      _navigateToBusManagement,
+                    ),
+                    _buildFlatAppIcon(
+                      'Track Bus',
+                      'map', // using map icon placeholder
+                      _navigateToLiveTracking,
+                    ),
+                  ],
                   _buildFlatAppIcon(
                     'Manage Exams',
                     'exam',

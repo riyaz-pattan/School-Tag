@@ -1133,8 +1133,8 @@ exports.createUser = functions.https.onCall(async (data, context) => {
       // Super admin can create any user (admin, teacher, student) in any school
       hasPermission = true;
     } else if (callerAdminInfo.isSchoolAdmin) {
-      // School admin can only create teachers and students in their own school
-      if (userData.role === 'teacher' || userData.role === 'student') {
+      // School admin can only create teachers, students, and drivers in their own school
+      if (userData.role === 'teacher' || userData.role === 'student' || userData.role === 'driver') {
         if (userData.schoolCode === callerAdminInfo.schoolCode) {
           hasPermission = true;
           enforcedSchoolCode = callerAdminInfo.schoolCode; // Ensure school admin can't change school code
@@ -1147,7 +1147,7 @@ exports.createUser = functions.https.onCall(async (data, context) => {
       } else {
         throw new functions.https.HttpsError(
           'permission-denied', 
-          'School admins can only create teachers and students'
+          'School admins can only create teachers, students, and drivers'
         );
       }
     } else {
@@ -1527,14 +1527,14 @@ async function processSingleUserOptimized(
   if (isCallerSuperAdmin) {
     hasPermission = true;
   } else if (callerAdminInfo.isSchoolAdmin) {
-    if (userData.role === 'teacher' || userData.role === 'student') {
+    if (userData.role === 'teacher' || userData.role === 'student' || userData.role === 'driver') {
       if (userData.schoolCode === callerAdminInfo.schoolCode) {
         hasPermission = true;
       } else {
         throw new Error('School admins can only create users for their own school');
       }
     } else {
-      throw new Error('School admins can only create teachers and students');
+      throw new Error('School admins can only create teachers, students, and drivers');
     }
   } else {
     throw new Error('Only super admins and school admins can create users');
@@ -2703,3 +2703,50 @@ exports.onLeaveApplicationCreated = functions.firestore
       return null;
     }
   });
+
+// NEW: Cleanup stale active routes (older than 5 hours)
+exports.cleanupStaleActiveRoutes = functions.pubsub.schedule('every 30 minutes').onRun(async (context) => {
+  const db = admin.firestore();
+  const rtdb = admin.database();
+  const cutoffTime = new Date(Date.now() - 5 * 60 * 60 * 1000); // 5 hours ago
+
+  try {
+    const snapshot = await db.collection('Routes')
+      .where('isActive', '==', true)
+      .where('startTime', '<', cutoffTime)
+      .get();
+
+    if (snapshot.empty) {
+      console.log('No stale routes found.');
+      return null;
+    }
+
+    const batch = db.batch();
+    const routeIds = [];
+
+    snapshot.forEach(doc => {
+      batch.update(doc.ref, {
+        isActive: false,
+        activeDriverId: null,
+        activeBusId: null,
+        startTime: null
+      });
+      routeIds.push(doc.id);
+    });
+
+    await batch.commit();
+
+    // Clean up RTDB nodes
+    const rtdbPromises = routeIds.map(routeId => {
+      return rtdb.ref(`live_trips/${routeId}`).remove();
+    });
+
+    await Promise.all(rtdbPromises);
+
+    console.log(`Successfully cleaned up ${routeIds.length} stale routes: ${routeIds.join(', ')}`);
+    return null;
+  } catch (error) {
+    console.error('Error cleaning up stale active routes:', error);
+    return null;
+  }
+});

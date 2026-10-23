@@ -176,7 +176,7 @@ class _AdminAddUsersScreenState extends State<AdminAddUsersScreen>
     if (_selectedRole == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select a role (Teacher or Student) first'),
+          content: Text('Please select a role (Teacher, Student, or Driver) first'),
           backgroundColor: Colors.red,
         ),
       );
@@ -428,7 +428,7 @@ class _AdminAddUsersScreenState extends State<AdminAddUsersScreen>
   Future<void> _createUser() async {
     if (_selectedRole == null) {
       setState(() {
-        _errorMessage = 'Please select a role (Teacher or Student)';
+        _errorMessage = 'Please select a role (Teacher, Student, or Driver)';
       });
       return;
     }
@@ -437,6 +437,7 @@ class _AdminAddUsersScreenState extends State<AdminAddUsersScreen>
     if (_selectedRole == 'student') {
       username = _studentIdController.text.trim();
     } else {
+      // Both teacher and driver use the username field
       username = _usernameController.text.trim();
     }
 
@@ -728,7 +729,7 @@ class _AdminAddUsersScreenState extends State<AdminAddUsersScreen>
     if (_selectedRole == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select a role (Teacher or Student)'),
+          content: Text('Please select a role (Teacher, Student, or Driver)'),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 5),
         ),
@@ -2531,7 +2532,7 @@ class _AdminAddUsersScreenState extends State<AdminAddUsersScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Choose whether you want to add a teacher or student',
+                  'Choose whether you want to add a teacher, student, or driver',
                   style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                   textAlign: TextAlign.center,
                 ),
@@ -2553,6 +2554,15 @@ class _AdminAddUsersScreenState extends State<AdminAddUsersScreen>
                         Icons.person,
                         Colors.blue,
                         'Add students',
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildRoleCard(
+                        'Driver',
+                        Icons.directions_bus,
+                        Colors.green,
+                        'Add bus drivers',
                       ),
                     ),
                   ],
@@ -2719,7 +2729,9 @@ class _AdminAddUsersScreenState extends State<AdminAddUsersScreen>
           decoration: InputDecoration(
             labelText: _selectedRole == 'student'
                 ? 'Student ID (Username) *'
-                : 'Teacher ID (Username) *',
+                : _selectedRole == 'driver'
+                    ? 'Driver ID (Username) *'
+                    : 'Teacher ID (Username) *',
             hintText: 'Enter ID/Username',
             border: const OutlineInputBorder(),
             prefixIcon: const Icon(Icons.person),

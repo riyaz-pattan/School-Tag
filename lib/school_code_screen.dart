@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'teacher_dashboard_screen.dart';
 import 'student_dashboard_screen.dart';
 import 'admin_dashboard_screen.dart';
+import 'driver_dashboard_screen.dart';
 import 'initial_login_screen.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
@@ -290,6 +291,11 @@ class _SchoolCodeScreenState extends State<SchoolCodeScreen> {
         destinationScreen = StudentDashboardScreen(
           userId: widget.userId!,
           schoolName: schoolName,
+          schoolCode: schoolCode,
+        );
+        break;
+      case 'driver':
+        destinationScreen = DriverDashboardScreen(
           schoolCode: schoolCode,
         );
         break;

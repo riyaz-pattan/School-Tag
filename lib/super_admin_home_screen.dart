@@ -1,5 +1,7 @@
 // super_admin_home_screen.dart
 import 'package:flutter/material.dart';
+import 'theme/app_theme.dart';
+import 'theme/glass_card.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -543,13 +545,13 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
+                              AppTheme.onPrimary,
                             ),
                           ),
                         )
                       : const Text(
                           'Change Password',
-                          style: TextStyle(color: Colors.white),
+                          style: TextStyle(color: AppTheme.onPrimary),
                         ),
                 ),
               ],
@@ -584,16 +586,16 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
 
     Widget _buildMobileTabletLayout() {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4FAFF),
+      backgroundColor: AppTheme.surface,
       appBar: _isMobile
           ? null // Use custom modern header instead of standard Appbar
           : AppBar(
-              title: const Text('Super Admin Dashboard', style: TextStyle(color: Color(0xFF001F2A), fontWeight: FontWeight.bold)),
-              backgroundColor: const Color(0xFFFFFFFF),
+              title: const Text('Super Admin Dashboard', style: TextStyle(color: AppTheme.onSurface, fontWeight: FontWeight.bold)),
+              backgroundColor: AppTheme.surfaceContainerLowest,
               elevation: 0,
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.refresh, color: Color(0xFF00113A)),
+                  icon: const Icon(Icons.refresh, color: AppTheme.primary),
                   onPressed: _loadDashboardData,
                   tooltip: 'Refresh',
                 ),
@@ -607,8 +609,8 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
       drawer: _isMobile ? _buildMobileDrawer() : null,
       body: RefreshIndicator(
         onRefresh: _onRefresh,
-        color: const Color(0xFF00113A),
-        backgroundColor: Colors.white,
+        color: AppTheme.primary,
+        backgroundColor: AppTheme.onPrimary,
         child: _getCurrentScreen(),
       ),
       bottomNavigationBar: _isMobile ? _buildModernBottomNav() : null,
@@ -618,10 +620,10 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
   Widget _buildModernBottomNav() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
+        color: AppTheme.surfaceContainerLowest,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF001F2A).withOpacity(0.08),
+            color: AppTheme.onSurface.withOpacity(0.08),
             blurRadius: 24,
             offset: const Offset(0, -4),
           ),
@@ -656,7 +658,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
         duration: const Duration(milliseconds: 300),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFE6F6FF) : Colors.transparent,
+          color: isSelected ? AppTheme.surfaceContainerLow : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
@@ -664,14 +666,14 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
           children: [
             Icon(
               icon,
-              color: isSelected ? const Color(0xFF00113A) : const Color(0xFF757682),
+              color: isSelected ? AppTheme.primary : AppTheme.outline,
               size: 24,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? const Color(0xFF00113A) : const Color(0xFF757682),
+                color: isSelected ? AppTheme.primary : AppTheme.outline,
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
@@ -684,14 +686,14 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
 
   Widget _buildMobileDrawer() {
     return Drawer(
-      backgroundColor: const Color(0xFFF4FAFF),
+      backgroundColor: AppTheme.surface,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF00113A), Color(0xFF399E9D)],
+                colors: [AppTheme.primary, AppTheme.onTertiaryContainer],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -703,7 +705,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                 Text(
                   _superAdminName,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppTheme.onPrimary,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
@@ -727,7 +729,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
           }, isSelected: _currentIndex == 2),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Divider(color: Color(0xFFC5C6D2)),
+            child: Divider(color: AppTheme.outlineVariant),
           ),
           _buildDrawerItem(Icons.person_add_rounded, 'Add Users', _navigateToAddUsers),
           _buildDrawerItem(Icons.people_alt_rounded, 'Manage Users', _navigateToUserManagement),
@@ -741,11 +743,11 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
   }
 
   Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap, {bool isSelected = false, bool isDestructive = false}) {
-    final color = isDestructive ? Colors.redAccent : (isSelected ? const Color(0xFF00113A) : const Color(0xFF001F2A));
+    final color = isDestructive ? Colors.redAccent : (isSelected ? AppTheme.primary : AppTheme.onSurface);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFFE6F6FF) : Colors.transparent,
+        color: isSelected ? AppTheme.surfaceContainerLow : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
       ),
       child: ListTile(
@@ -764,7 +766,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
 
   Widget _buildDesktopLayout() {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4FAFF),
+      backgroundColor: AppTheme.surface,
       body: Row(
         children: [
           _buildDesktopSidebar(),
@@ -775,7 +777,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: _onRefresh,
-                    color: const Color(0xFF00113A),
+                    color: AppTheme.primary,
                     child: _getCurrentScreen(),
                   ),
                 ),
@@ -791,10 +793,10 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
     return Container(
       width: 280,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
+        color: AppTheme.surfaceContainerLowest,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF001F2A).withOpacity(0.04),
+            color: AppTheme.onSurface.withOpacity(0.04),
             blurRadius: 24,
             offset: const Offset(4, 0),
           ),
@@ -812,14 +814,14 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                     height: 80,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF00113A), Color(0xFF399E9D)],
+                        colors: [AppTheme.primary, AppTheme.onTertiaryContainer],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF00113A).withOpacity(0.2),
+                          color: AppTheme.primary.withOpacity(0.2),
                           blurRadius: 16,
                           offset: const Offset(0, 8),
                         ),
@@ -831,7 +833,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                         style: const TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: AppTheme.onPrimary,
                         ),
                       ),
                     ),
@@ -842,14 +844,14 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
-                      color: Color(0xFF001F2A),
+                      color: AppTheme.onSurface,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 4),
                   const Text(
                     'Super Administrator',
-                    style: TextStyle(color: Color(0xFF757682), fontSize: 13),
+                    style: TextStyle(color: AppTheme.outline, fontSize: 13),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -857,7 +859,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 24),
-              child: Divider(color: Color(0xFFE6F6FF)),
+              child: Divider(color: AppTheme.surfaceContainerLow),
             ),
             Expanded(
               child: ListView(
@@ -875,7 +877,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.2,
-                        color: Color(0xFF757682),
+                        color: AppTheme.outline,
                       ),
                     ),
                   ),
@@ -917,15 +919,15 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.only(bottom: 4),
       decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFF00113A) : Colors.transparent,
+        color: isSelected ? AppTheme.primary : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
       ),
       child: ListTile(
-        leading: Icon(icon, color: isSelected ? Colors.white : const Color(0xFF757682)),
+        leading: Icon(icon, color: isSelected ? AppTheme.onPrimary : AppTheme.outline),
         title: Text(
           title,
           style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF001F2A),
+            color: isSelected ? AppTheme.onPrimary : AppTheme.onSurface,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
           ),
         ),
@@ -946,7 +948,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
     return Container(
       margin: const EdgeInsets.only(bottom: 4),
       child: ListTile(
-        leading: Icon(icon, color: const Color(0xFF757682)),
+        leading: Icon(icon, color: AppTheme.outline),
         title: Text(
           title,
           style: const TextStyle(
@@ -955,7 +957,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
           ),
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        hoverColor: const Color(0xFFE6F6FF),
+        hoverColor: AppTheme.surfaceContainerLow,
         onTap: onTap,
       ),
     );
@@ -966,14 +968,14 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
       height: 72,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: const BoxDecoration(
-        color: Color(0xFFFFFFFF),
-        border: Border(bottom: BorderSide(color: Color(0xFFE6F6FF), width: 1)),
+        color: AppTheme.surfaceContainerLowest,
+        border: Border(bottom: BorderSide(color: AppTheme.surfaceContainerLow, width: 1)),
       ),
       child: Row(
         children: [
           if (_currentIndex != 0)
             IconButton(
-              icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF00113A)),
+              icon: const Icon(Icons.arrow_back_rounded, color: AppTheme.primary),
               onPressed: () {
                 setState(() {
                   _currentIndex = 0;
@@ -987,14 +989,14 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF00113A),
+              color: AppTheme.primary,
             ),
           ),
           const Spacer(),
           _buildSearchBar(),
           const SizedBox(width: 16),
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF00113A)),
+            icon: const Icon(Icons.refresh_rounded, color: AppTheme.primary),
             onPressed: _loadDashboardData,
             tooltip: 'Refresh Data',
           ),
@@ -1009,16 +1011,16 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4FAFF),
+        color: AppTheme.surface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE6F6FF)),
+        border: Border.all(color: AppTheme.surfaceContainerLow),
       ),
       child: TextField(
         decoration: const InputDecoration(
           hintText: 'Search...',
-          hintStyle: TextStyle(color: Color(0xFF757682)),
+          hintStyle: TextStyle(color: AppTheme.outline),
           border:InputBorder.none,
-          prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF757682)),
+          prefixIcon: Icon(Icons.search_rounded, color: AppTheme.outline),
           contentPadding: EdgeInsets.symmetric(vertical: 12),
         ),
         onChanged: (value) {
@@ -1058,7 +1060,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
     return FadeTransition(
       opacity: _fadeInAnimation,
       child: Container(
-        color: const Color(0xFFF4FAFF),
+        color: AppTheme.surface,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
@@ -1094,14 +1096,14 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
         padding: const EdgeInsets.fromLTRB(20, 60, 20, 32),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF00113A), Color(0xFF399E9D)],
+            colors: [AppTheme.primary, AppTheme.onTertiaryContainer],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF00113A).withOpacity(0.15),
+              color: AppTheme.primary.withOpacity(0.15),
               blurRadius: 24,
               offset: const Offset(0, 12),
             ),
@@ -1119,7 +1121,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white.withOpacity(0.8),
+                      color: AppTheme.onPrimary.withOpacity(0.8),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1128,7 +1130,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                     style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                      color: AppTheme.onPrimary,
                       letterSpacing: -0.5,
                     ),
                     maxLines: 1,
@@ -1138,21 +1140,21 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: AppTheme.onPrimary.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      border: Border.all(color: AppTheme.onPrimary.withOpacity(0.2)),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 16),
+                        Icon(Icons.admin_panel_settings_rounded, color: AppTheme.onPrimary, size: 16),
                         SizedBox(width: 8),
                         Text(
                           'Executive Console',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                            color: AppTheme.onPrimary,
                             letterSpacing: 0.5,
                           ),
                         ),
@@ -1162,18 +1164,22 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                 ],
               ),
             ),
-            GestureDetector(
-              onTap: () => Scaffold.of(context).openDrawer(),
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.2),
-                  border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
-                ),
-                child: const Icon(Icons.menu_rounded, color: Colors.white, size: 28),
-              ),
+            Builder(
+              builder: (BuildContext context) {
+                return GestureDetector(
+                  onTap: () => Scaffold.of(context).openDrawer(),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppTheme.onPrimary.withOpacity(0.2),
+                      border: Border.all(color: AppTheme.onPrimary.withOpacity(0.4), width: 2),
+                    ),
+                    child: const Icon(Icons.menu_rounded, color: AppTheme.onPrimary, size: 28),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -1186,14 +1192,14 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF00113A), Color(0xFF399E9D)],
+          colors: [AppTheme.primary, AppTheme.onTertiaryContainer],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF00113A).withOpacity(0.15),
+            color: AppTheme.primary.withOpacity(0.15),
             blurRadius: 32,
             offset: const Offset(0, 16),
           ),
@@ -1210,32 +1216,32 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                   style: const TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: AppTheme.onPrimary,
                     letterSpacing: -0.5,
                   ),
                 ),
                 const SizedBox(height: 12),
                 const Text(
                   'Command center for institutional legacy and management.',
-                  style: TextStyle(fontSize: 16, color: Color(0xFFE6F6FF)),
+                  style: TextStyle(fontSize: 16, color: AppTheme.surfaceContainerLow),
                 ),
                 if (_lastDataFetchTime != null) ...[
                   const SizedBox(height: 20),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
+                      color: AppTheme.onPrimary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      border: Border.all(color: AppTheme.onPrimary.withOpacity(0.2)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.update_rounded, size: 16, color: Colors.white),
+                        const Icon(Icons.update_rounded, size: 16, color: AppTheme.onPrimary),
                         const SizedBox(width: 8),
                         Text(
                           'Synced: ${_formatDateTime(_lastDataFetchTime!)}',
-                          style: const TextStyle(fontSize: 13, color: Colors.white),
+                          style: const TextStyle(fontSize: 13, color: AppTheme.onPrimary),
                         ),
                       ],
                     ),
@@ -1247,7 +1253,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
           Icon(
             Icons.account_balance_rounded,
             size: 120,
-            color: Colors.white.withOpacity(0.15),
+            color: AppTheme.onPrimary.withOpacity(0.15),
           ),
         ],
       ),
@@ -1263,7 +1269,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w800,
-            color: Color(0xFF001F2A),
+            color: AppTheme.onSurface,
             letterSpacing: -0.5,
           ),
         ),
@@ -1275,8 +1281,8 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                 'Total Schools',
                 _totalSchools.toString(),
                 Icons.account_balance_rounded,
-                const Color(0xFF00113A),
-                const Color(0xFFE6F6FF),
+                AppTheme.primary,
+                AppTheme.surfaceContainerLow,
               ),
             ),
             const SizedBox(width: 16),
@@ -1305,11 +1311,11 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
+        color: AppTheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF001F2A).withOpacity(0.06),
+            color: AppTheme.onSurface.withOpacity(0.06),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -1341,7 +1347,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
             title,
             style: const TextStyle(
               fontSize: 14,
-              color: Color(0xFF757682),
+              color: AppTheme.outline,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1359,7 +1365,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w800,
-            color: Color(0xFF001F2A),
+            color: AppTheme.onSurface,
             letterSpacing: -0.5,
           ),
         ),
@@ -1378,7 +1384,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                'School Management',
                'Manage institutional data',
                Icons.domain_add_rounded,
-               const Color(0xFF00113A),
+               AppTheme.primary,
                _navigateToSchoolManagement,
             ),
             _buildActionCard(
@@ -1392,7 +1398,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                'Add Users',
                'Provision new accounts',
                Icons.person_add_rounded,
-               const Color(0xFF399E9D),
+               AppTheme.onTertiaryContainer,
                _navigateToAddUsers,
             ),
             _buildActionCard(
@@ -1436,11 +1442,11 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFFFFF),
+            color: AppTheme.surfaceContainerLowest,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF001F2A).withOpacity(0.04),
+                color: AppTheme.onSurface.withOpacity(0.04),
                 blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
@@ -1468,7 +1474,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF001F2A),
+                        color: AppTheme.onSurface,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1476,7 +1482,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF757682)),
+                      style: const TextStyle(fontSize: 12, color: AppTheme.outline),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1508,18 +1514,18 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF00113A),
+              color: AppTheme.primary,
               letterSpacing: -0.5,
             ),
           ),
           const SizedBox(height: 24),
           Container(
             decoration: BoxDecoration(
-              color: const Color(0xFFFFFFFF),
+              color: AppTheme.surfaceContainerLowest,
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF001F2A).withOpacity(0.05),
+                  color: AppTheme.onSurface.withOpacity(0.05),
                   blurRadius: 24,
                   offset: const Offset(0, 12),
                 ),
@@ -1536,7 +1542,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                   _buildPremiumInfoRow('Access Level', 'Executive / Super Administrator'),
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Divider(color: Color(0xFFE6F6FF)),
+                    child: Divider(color: AppTheme.surfaceContainerLow),
                   ),
                   _buildPremiumInfoRow('Total Enrolled Schools', _totalSchools.toString()),
                   _buildPremiumInfoRow('Active Schools', _activeSchools.toString()),
@@ -1568,7 +1574,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
               label,
               style: const TextStyle(
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF757682),
+                color: AppTheme.outline,
                 fontSize: 14,
               ),
             ),
@@ -1577,7 +1583,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
             child: Text(
               value,
               style: const TextStyle(
-                color: Color(0xFF001F2A),
+                color: AppTheme.onSurface,
                 fontWeight: FontWeight.w600,
                 fontSize: 15,
               ),
@@ -1607,11 +1613,11 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
           width: 400,
           padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFFFFF),
+            color: AppTheme.surfaceContainerLowest,
             borderRadius: BorderRadius.circular(32),
             boxShadow: [
                BoxShadow(
-                 color: const Color(0xFF001F2A).withOpacity(0.1),
+                 color: AppTheme.onSurface.withOpacity(0.1),
                  blurRadius: 32,
                  offset: const Offset(0, 16),
                ),
@@ -1623,22 +1629,22 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE6F6FF),
+                  color: AppTheme.surfaceContainerLow,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.analytics_rounded, color: Color(0xFF00113A), size: 32),
+                child: const Icon(Icons.analytics_rounded, color: AppTheme.primary, size: 32),
               ),
               const SizedBox(height: 24),
               const Text(
                  'System Overview',
-                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF001F2A)),
+                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppTheme.onSurface),
               ),
               const SizedBox(height: 32),
               _buildSystemOverviewCard(
                 'Total Network Schools',
                 _totalSchools.toString(),
                 Icons.account_balance_rounded,
-                const Color(0xFF00113A),
+                AppTheme.primary,
               ),
               const SizedBox(height: 16),
               _buildSystemOverviewCard(
@@ -1652,7 +1658,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                 'Last Data Sync',
                 _lastDataFetchTime != null ? _formatDateTime(_lastDataFetchTime!) : 'Never',
                 Icons.sync_rounded,
-                const Color(0xFF399E9D),
+                AppTheme.onTertiaryContainer,
               ),
               const SizedBox(height: 32),
               SizedBox(
@@ -1661,8 +1667,8 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
                 child: ElevatedButton(
                    onPressed: () => Navigator.pop(context),
                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF4FAFF),
-                      foregroundColor: const Color(0xFF00113A),
+                      backgroundColor: AppTheme.surface,
+                      foregroundColor: AppTheme.primary,
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                    ),
@@ -1680,7 +1686,7 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4FAFF),
+        color: AppTheme.surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -1700,12 +1706,12 @@ class _SuperAdminHomeScreenState extends State<SuperAdminHomeScreen>
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF757682), fontWeight: FontWeight.w600),
+                  style: const TextStyle(fontSize: 13, color: AppTheme.outline, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   value,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF001F2A)),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.onSurface),
                 ),
               ],
             ),
@@ -2413,13 +2419,13 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
+                            AppTheme.onPrimary,
                           ),
                         ),
                       )
                     : const Text(
                         'Confirm Delete',
-                        style: TextStyle(color: Colors.white),
+                        style: TextStyle(color: AppTheme.onPrimary),
                       ),
               ),
             ],
@@ -2432,12 +2438,12 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4FAFF),
+      backgroundColor: AppTheme.surface,
       appBar: AppBar(
-        title: const Text('School Deployments', style: TextStyle(color: Color(0xFF001F2A), fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFFFFFFF),
+        title: const Text('School Deployments', style: TextStyle(color: AppTheme.onSurface, fontWeight: FontWeight.bold)),
+        backgroundColor: AppTheme.surfaceContainerLowest,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF00113A)),
+        iconTheme: const IconThemeData(color: AppTheme.primary),
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24),
@@ -2448,11 +2454,11 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFFFFF),
+                  color: AppTheme.surfaceContainerLowest,
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                      BoxShadow(
-                       color: const Color(0xFF001F2A).withOpacity(0.04),
+                       color: AppTheme.onSurface.withOpacity(0.04),
                        blurRadius: 24,
                        offset: const Offset(0, 8),
                      ),
@@ -2468,10 +2474,10 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE6F6FF),
+                              color: AppTheme.surfaceContainerLow,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.add_business_rounded, color: Color(0xFF00113A)),
+                            child: const Icon(Icons.add_business_rounded, color: AppTheme.primary),
                           ),
                           const SizedBox(width: 16),
                           const Text(
@@ -2479,7 +2485,7 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
-                              color: Color(0xFF001F2A),
+                              color: AppTheme.onSurface,
                             ),
                           ),
                         ],
@@ -2489,11 +2495,11 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                         controller: _schoolNameController,
                         decoration: InputDecoration(
                           labelText: 'Official School Name',
-                          labelStyle: const TextStyle(color: Color(0xFF757682)),
+                          labelStyle: const TextStyle(color: AppTheme.outline),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                           filled: true,
-                          fillColor: const Color(0xFFF4FAFF),
-                          prefixIcon: const Icon(Icons.school_rounded, color: Color(0xFF757682)),
+                          fillColor: AppTheme.surface,
+                          prefixIcon: const Icon(Icons.school_rounded, color: AppTheme.outline),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                         ),
                       ),
@@ -2502,11 +2508,11 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                         controller: _schoolCodeController,
                         decoration: InputDecoration(
                           labelText: 'Unique 6-Digit Code',
-                          labelStyle: const TextStyle(color: Color(0xFF757682)),
+                          labelStyle: const TextStyle(color: AppTheme.outline),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                           filled: true,
-                          fillColor: const Color(0xFFF4FAFF),
-                          prefixIcon: const Icon(Icons.pin_rounded, color: Color(0xFF757682)),
+                          fillColor: AppTheme.surface,
+                          prefixIcon: const Icon(Icons.pin_rounded, color: AppTheme.outline),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                           counterText: "",
                         ),
@@ -2518,13 +2524,13 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                         controller: _schoolAddressController,
                         decoration: InputDecoration(
                           labelText: 'Campus Address (Optional)',
-                          labelStyle: const TextStyle(color: Color(0xFF757682)),
+                          labelStyle: const TextStyle(color: AppTheme.outline),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                           filled: true,
-                          fillColor: const Color(0xFFF4FAFF),
+                          fillColor: AppTheme.surface,
                           prefixIcon: const Padding(
                             padding: EdgeInsets.only(bottom: 24),
-                            child: Icon(Icons.location_on_rounded, color: Color(0xFF757682)),
+                            child: Icon(Icons.location_on_rounded, color: AppTheme.outline),
                           ),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                         ),
@@ -2533,7 +2539,7 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                       const SizedBox(height: 24),
                       const Text(
                         'Campus Identity',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF001F2A)),
+                        style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.onSurface),
                       ),
                       const SizedBox(height: 12),
                       if (_selectedImageBytes != null) ...[
@@ -2558,8 +2564,8 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                           icon: const Icon(Icons.add_photo_alternate_rounded),
                           label: const Text('Upload Photo (Max 1MB)', style: TextStyle(fontWeight: FontWeight.bold)),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF00113A),
-                            side: const BorderSide(color: Color(0xFF00113A), width: 1.5),
+                            foregroundColor: AppTheme.primary,
+                            side: const BorderSide(color: AppTheme.primary, width: 1.5),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
@@ -2571,14 +2577,14 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                         child: Container(
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF00113A), Color(0xFF399E9D)],
+                              colors: [AppTheme.primary, AppTheme.onTertiaryContainer],
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
                             ),
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                                BoxShadow(
-                                 color: const Color(0xFF00113A).withOpacity(0.2),
+                                 color: AppTheme.primary.withOpacity(0.2),
                                  blurRadius: 12,
                                  offset: const Offset(0, 4),
                                ),
@@ -2595,14 +2601,14 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                                 ? const SizedBox(
                                     width: 24,
                                     height: 24,
-                                    child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                                    child: CircularProgressIndicator(strokeWidth: 2.5, color: AppTheme.onPrimary),
                                   )
                                 : const Row(
                                    mainAxisAlignment: MainAxisAlignment.center,
                                    children: [
-                                      Icon(Icons.add_box_rounded, color: Colors.white),
+                                      Icon(Icons.add_box_rounded, color: AppTheme.onPrimary),
                                       SizedBox(width: 8),
-                                      Text('Provision System Code', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                                      Text('Provision System Code', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.onPrimary)),
                                    ]
                                 ),
                           ),
@@ -2618,13 +2624,13 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                 children: [
                   const Text(
                     'Active Deployments',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF001F2A)),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.onSurface),
                   ),
                   const Spacer(),
                   Container(
                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                     decoration: BoxDecoration(color: const Color(0xFFE6F6FF), borderRadius: BorderRadius.circular(12)),
-                     child: const Text('Live', style: TextStyle(color: Color(0xFF00113A), fontWeight: FontWeight.bold, fontSize: 12)),
+                     decoration: BoxDecoration(color: AppTheme.surfaceContainerLow, borderRadius: BorderRadius.circular(12)),
+                     child: const Text('Live', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold, fontSize: 12)),
                   ),
                 ],
               ),
@@ -2634,21 +2640,21 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                 stream: FirebaseFirestore.instance.collection('schools').snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator(color: Color(0xFF00113A))));
+                    return const Center(child: Padding(padding: EdgeInsets.all(40.0), child: CircularProgressIndicator(color: AppTheme.primary)));
                   }
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return Container(
                       padding: const EdgeInsets.all(40),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFFFFF),
+                        color: AppTheme.surfaceContainerLowest,
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: const Center(
                         child: Column(
                            children: [
-                              Icon(Icons.domain_disabled_rounded, size: 48, color: Color(0xFFC5C6D2)),
+                              Icon(Icons.domain_disabled_rounded, size: 48, color: AppTheme.outlineVariant),
                               SizedBox(height: 16),
-                              Text('No deployments found', style: TextStyle(fontSize: 16, color: Color(0xFF757682), fontWeight: FontWeight.bold)),
+                              Text('No deployments found', style: TextStyle(fontSize: 16, color: AppTheme.outline, fontWeight: FontWeight.bold)),
                            ],
                         )
                       ),

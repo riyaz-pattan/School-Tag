@@ -16,6 +16,8 @@ import 'school_code_screen.dart';
 import 'teacher_view_exam_schedule_screen.dart';
 import 'messages_screen.dart';
 import 'widgets/dashboard_skeleton.dart';
+import 'services/remote_config_service.dart';
+import 'live_tracking_screen.dart';
 
 class TeacherDashboardScreen extends StatefulWidget {
   final String userId;
@@ -43,6 +45,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
   String _teacherName = '';
   String? _errorMessage;
   bool _isRefreshing = false;
+  bool _isBusTrackingEnabled = false;
+  final RemoteConfigService _remoteConfigService = RemoteConfigService();
 
   // Cache keys
   static const String _teacherDataCacheKey = 'teacher_data';
@@ -139,8 +143,10 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
       // Then load fresh data in background
       await _loadFreshData();
       await _initializeFCM();
+      await _remoteConfigService.initialize();
       if (mounted) {
         setState(() {
+          _isBusTrackingEnabled = _remoteConfigService.isBusTrackingEnabled(widget.schoolCode);
           _isLoading = false;
         });
       }
@@ -1162,6 +1168,17 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     );
   }
 
+  void _navigateToLiveTracking() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LiveTrackingScreen(
+          schoolCode: widget.schoolCode,
+        ),
+      ),
+    );
+  }
+
   Widget _buildMobileDrawer() {
     return Drawer(
       child: ListView(
@@ -1883,6 +1900,12 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                 'exam',
                 _navigateToExamSchedules,
               ),
+              if (_isBusTrackingEnabled)
+                _buildModernAppIcon(
+                  'Track Bus',
+                  'bus',
+                  _navigateToLiveTracking,
+                ),
               _buildModernAppIcon(
                 'Timetable',
                 'calendar',
